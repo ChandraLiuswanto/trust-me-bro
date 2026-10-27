@@ -1,0 +1,15 @@
+{
+  "name": "trust-me-bro",
+  "version": "0.1.0",
+  "description": "Say lgtm once. The agents do the rest. Trust me bro.",
+  "license": "MIT",
+  "author": "Chandra Liuswanto",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ChandraLiuswanto/trust-me-bro.git"
+  },
+  "keywords": ["pi-package", "skills", "agents", "paseo"],
+  "pi": {
+    "skills": ["./skills"]
+  }
+}
