@@ -1,28 +1,23 @@
----
-name: web-scraping-production
-description: Use when the scraper runs unattended (nightly, weekly, in a cron, or as a daemon) — architecture for self-healing, the verification that turns a model-rewritten selector into something safe to ship, and the silent-failure modes that page you (200 with zero rows, row-count drops, content drift, poisoned data, content-type shifts).
----
-
 # Web Scraping in Production
 
-The skills `web-scraping-data-sources`, `web-scraping-blocked`, and `web-scraping-llm-extraction` all assume a human is in the loop. This one assumes the run happens at 3 a.m. and the on-call is asleep.
+The guides `data-sources.md`, `blocked.md`, and `llm-extraction.md` all assume a human is in the loop. This one assumes the run happens at 3 a.m. and the on-call is asleep.
 
 ## Cross-refs
 
-- `web-scraping` (parent) for the decision ladder, build-vs-buy rung, and 429-vs-403 triage.
-- `web-scraping-blocked` for what to do when 4 a.m. is also getting 403s.
-- `web-scraping-llm-extraction` for the model-writes-code pattern, the 10 failure modes, and the prompt-injection surface.
-- `web-scraping-data-sources` for the API-vs-HTML trade and the recon checklist.
+- `SKILL.md` for the decision ladder, build-vs-buy rung, and 429-vs-403 triage.
+- `blocked.md` for what to do when 4 a.m. is also getting 403s.
+- `llm-extraction.md` for the model-writes-code pattern, the 10 failure modes, and the prompt-injection surface.
+- `data-sources.md` for the API-vs-HTML trade and the recon checklist.
 
 ## 0. The thesis
 
 > **A scraper that runs perfectly can still be wrong.**
 
-Two practitioners posted the same finding in the same week. One ran twelve requests, got 200 on every one, and collected zero rows. The other put it as a rule: a scraper can return 200 and still have collected the wrong page. The whole rest of this skill is what you build around that observation — so the failure pages you, not your customer.
+Two practitioners posted the same finding in the same week. One ran twelve requests, got 200 on every one, and collected zero rows. The other put it as a rule: a scraper can return 200 and still have collected the wrong page. The whole rest of this guide is what you build around that observation — so the failure pages you, not your customer.
 
 A modern firewall rarely hard-blocks you. It returns `200 OK` with a degraded body: an empty list, sanitised prices, a tarpit, yesterday's snapshot frozen in place, an interstitial you mistook for content. **Status code is not a success signal. Coverage is.**
 
-## 1. When to use this skill
+## 1. When to use this guide
 
 - A scraper runs on a schedule (cron, K8s job, serverless schedule).
 - You depend on its output downstream (BI, ML, RAG ingestion, alerts).
@@ -30,7 +25,7 @@ A modern firewall rarely hard-blocks you. It returns `200 OK` with a degraded bo
 - It is allowed to rewrite its own selectors (i.e. a model is in the loop).
 - It collects from more than one page per run, so a single bad request can pollute the whole dataset.
 
-> If you are doing a one-off browser session and you can see the result, you are in `web-scraping-blocked` and `web-scraping-llm-extraction` territory, not here.
+> If you are doing a one-off browser session and you can see the result, you are in `blocked.md` and `llm-extraction.md` territory, not here.
 
 ## 2. The architecture that survives
 
@@ -120,7 +115,7 @@ The 7 binary failure-mode-per-field pattern (hallucinated / off-target / type mi
 
 These are not detection; these are correctness:
 
-- **Same IP across the session.** A long-running authenticated scraper that swaps the exit IP mid-session re-auths (if you are lucky) or, if re-auth is silent, gets a 200 with the wrong account's view. Bind the session to a sticky exit, and bind the exit to the account for the account's life. When the exit dies, treat it as a planned re-login from the new location, not a continuation. See `web-scraping-blocked/proxies.md`.
+- **Same IP across the session.** A long-running authenticated scraper that swaps the exit IP mid-session re-auths (if you are lucky) or, if re-auth is silent, gets a 200 with the wrong account's view. Bind the session to a sticky exit, and bind the exit to the account for the account's life. When the exit dies, treat it as a planned re-login from the new location, not a continuation. See `proxies.md`.
 - **Same IP across restarts.** A snapshot that returns from a new region on restart looks stale *and* suspicious. Plan a re-login.
 - **Re-derive the mobile GraphQL `doc_id` on every run.** A pinned `doc_id` is the most common Facebook-feed-200-with-zero-rows cause. The token is a private schema that can shift without notice.
 - **Detect navigation loops without conflating with bounces.** Page 10 → page 1 is a *bounce*, not a loop. Store the page where a record was *first* seen, not the latest page number; otherwise the same record looks like ten records and your row count is wrong by an order of magnitude.
@@ -155,7 +150,7 @@ Run a sitemap parse separately from your crawl. Disagreement is an early signal 
 - **Scrapy 2.19's live debug endpoint** is on by default in every crawl. It is a real code-execution endpoint bound to the same user. If you scrape over a public network, you have a same-user remote code-execution surface. The fix is configuration, not a CVE patch. **Check the default on your crawl runner before the run starts.** The same class of risk applies to any framework that ships a "live" mode on by default.
 - **Remote-CDP mode in some stealth plugins** binds an unauthenticated credential-injecting proxy relay to `0.0.0.0`. Don't expose crawl workers on a public port.
 - **Dataset configs that load code.** A YAML config that names a "post-processing hook" can become a code-execution path. Treat configs as code.
-- **A crawler that follows a page's instructions and visits a new domain is browsing as you.** If you point a coding agent at the open web, give it the narrowest credentials that let it finish, keep secrets outside the context the page can influence, and put a deterministic allowlist on which domains and actions are permitted. **The page gets a vote on your agent.** See `web-scraping-llm-extraction` for the prompt-injection surface.
+- **A crawler that follows a page's instructions and visits a new domain is browsing as you.** If you point a coding agent at the open web, give it the narrowest credentials that let it finish, keep secrets outside the context the page can influence, and put a deterministic allowlist on which domains and actions are permitted. **The page gets a vote on your agent.** See `llm-extraction.md` for the prompt-injection surface.
 
 ## 11. Cost and rate (the second alarm)
 
@@ -178,4 +173,4 @@ Run a sitemap parse separately from your crawl. Disagreement is an early signal 
 - A `storageState` saved on a public network. **Don't.**
 - A Scrapy (or any framework) crawl running on a public port with the live debug endpoint on. **Stop the run.**
 
-> See `web-scraping` (parent) for the decision ladder, `web-scraping-blocked/vendors.md` for the per-vendor mechanics, and `web-scraping-llm-extraction` for the agentic patterns this skill composes on top of.
+> See `SKILL.md` for the decision ladder, `vendors.md` for the per-vendor mechanics, and `llm-extraction.md` for the agentic patterns this guide composes on top of.

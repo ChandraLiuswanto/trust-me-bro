@@ -87,4 +87,4 @@ Some limiters earn a token via browser sensor then don't bind the token to the w
 - A session that fails re-auth on a snapshot restore — your IP changed across the restore. Plan it as a re-login from the new location.
 - A target where a captcha-warmed cookie replay works for hours then stops — the token's bound here, or the `renewInSec` got shorter. Re-warm and re-test; do not assume the cheat is permanent.
 
-> See `web-scraping` (parent) for the decision ladder, and `vendors.md` (this skill) for the per-vendor mechanics.
+> See `SKILL.md` for the decision ladder, and `vendors.md` for the per-vendor mechanics.

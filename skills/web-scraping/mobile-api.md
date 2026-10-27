@@ -11,7 +11,7 @@ When the web is heavily protected, the same data often ships through the mobile 
 
 ## When to stop
 
-- The app uses Play Integrity / Apple App Attest / DeviceCheck / Android Key Attestation. The signing key lives in secure hardware (TEE, StrongBox, Secure Enclave). Rooting does not expose it; nothing the OS can see exposes it. Different problem; this skill doesn't solve it.
+- The app uses Play Integrity / Apple App Attest / DeviceCheck / Android Key Attestation. The signing key lives in secure hardware (TEE, StrongBox, Secure Enclave). Rooting does not expose it; nothing the OS can see exposes it. Different problem; this guide doesn't solve it.
 - ARM-only apps that don't run on x86 emulators, with no source of a comparable x86 build.
 - The signing lives in a bytecode VM you cannot reverse (drive the app as an oracle; the table at the bottom covers when this is worth the latency cost).
 

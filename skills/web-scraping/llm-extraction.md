@@ -1,27 +1,22 @@
----
-name: web-scraping-llm-extraction
-description: Use when messy pages need to become structured records with a model, or an agent needs to operate the web — LLM/agentic extraction patterns, the economics of paying for model calls per page, the ten failure modes agents ship in their own scrapers, and prompt injection on the way in.
----
-
 # Web Scraping with LLMs
 
 The case for letting a model read the page, the cost of doing it on every row, and the failure modes to engineer around.
 
 ## Cross-refs
 
-- `web-scraping` (parent) for the decision ladder and build-vs-buy rung.
-- `web-scraping-data-sources` for finding the API before reaching for an LLM.
-- `web-scraping-blocked` for what to do when the LLM path is also getting 403s.
-- `web-scraping-production` for monitoring, self-healing, and the silent-failure modes that hit LLM extractors too.
+- `SKILL.md` for the decision ladder and build-vs-buy rung.
+- `data-sources.md` for finding the API before reaching for an LLM.
+- `blocked.md` for what to do when the LLM path is also getting 403s.
+- `production.md` for monitoring, self-healing, and the silent-failure modes that hit LLM extractors too.
 
-## 0. When to use this skill
+## 0. When to use this guide
 
 - A page is messy enough that writing selectors costs more than the model call would.
 - The schema is fuzzy, page-to-page, or undocumented — and you want the model to negotiate it.
 - A multi-step UI flow (login, modal, paginated wizard) needs a real browser and a brain.
 - You are building an agent that operates the web, not a one-shot extractor.
 
-> If the data lives in `__NEXT_DATA__` or a GraphQL endpoint, you don't need an LLM. See `web-scraping-data-sources`. If the page is a clean static doc, an LLM is paying inference to read things a regex already handles.
+> If the data lives in `__NEXT_DATA__` or a GraphQL endpoint, you don't need an LLM. See `data-sources.md`. If the page is a clean static doc, an LLM is paying inference to read things a regex already handles.
 
 ## 1. The three reasons to put an LLM on the page
 
@@ -116,11 +111,11 @@ The most expensive LLM-scraping failure is the one that *looks correct*. A model
 
 ## 9. When this is the wrong skill
 
-- The data is in the initial HTML as JSON (`__NEXT_DATA__`, `__NUXT__`, `__INITIAL_STATE__`). You don't need a model. See `web-scraping-data-sources`.
+- The data is in the initial HTML as JSON (`__NEXT_DATA__`, `__NUXT__`, `__INITIAL_STATE__`). You don't need a model. See `data-sources.md`.
 - The page is clean static HTML. A regex + a Markdown converter (Firecrawl, MarkItDown, Crawl4AI) gets you 67% fewer tokens before the model ever reads it.
-- The bottleneck is *not* parsing. It's rate limiting, captcha, or blocks. See `web-scraping-blocked`.
+- The bottleneck is *not* parsing. It's rate limiting, captcha, or blocks. See `blocked.md`.
 - The job is bulk extraction across millions of pages. Even with a small model, per-page inference is the wrong architecture; let the model propose selectors and your code runs them.
-- You are doing production monitoring, self-healing, and silent-failure detection. That is its own discipline. See `web-scraping-production`.
+- You are doing production monitoring, self-healing, and silent-failure detection. That is its own discipline. See `production.md`.
 
 ## 10. Red flags
 

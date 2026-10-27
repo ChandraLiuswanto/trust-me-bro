@@ -1,8 +1,3 @@
----
-name: web-scraping-data-sources
-description: Use when figuring out where a website's data actually lives before writing a scraper — looking for an official API, embedded JSON in HTML, undocumented XHR/GraphQL endpoints, or a mobile app's API. Also use when a scraper is in place but is parsing HTML and the page has slowed to a crawl.
----
-
 # Web Scraping — Finding the Data Source
 
 Distilled from Asad Ikram's guide (https://asadfix.github.io/scraping-guide/, 2026). Vendor and tool specifics age fast; the order in which to look is durable.
@@ -65,7 +60,7 @@ Look for:
 
 The single most reliable bypass for HTML anti-bot: **the same site, on a phone, hits the same backend with far weaker protection.** Mobile teams ship faster and rarely have the same bot-mitigation budget as web.
 
-Trade-offs and tools live in `mobile-api.md` (this skill). The short version: a rooted Android emulator + HTTPToolkit intercepts all HTTPS transparently; Frida hooks `SSL_read`/`SSL_write` directly when the app pins certs. If you can recover the API, the HTML anti-bot becomes irrelevant.
+Trade-offs and tools live in `mobile-api.md`. The short version: a rooted Android emulator + HTTPToolkit intercepts all HTTPS transparently; Frida hooks `SSL_read`/`SSL_write` directly when the app pins certs. If you can recover the API, the HTML anti-bot becomes irrelevant.
 
 ### Rung 5 — Non-obvious endpoints (endpoint enumeration)
 
@@ -114,8 +109,8 @@ If you ticked at least three: write a 50-line script and ship. If you ticked zer
 
 ## 5. When this is the wrong skill
 
-- The data is gated behind a JS-rendered SPA and **no embedded state** is shipped, and no XHR you can find returns the data → load `web-scraping-blocked` (or just the JS-rendered section of it).
-- You have the data but it's in a 1,000-page document and you need a schema → load `web-scraping-llm-extraction`.
-- The scraper needs to run unattended → load `web-scraping-production` once you have a source.
+- The data is gated behind a JS-rendered SPA and **no embedded state** is shipped, and no XHR you can find returns the data → read `blocked.md` (or just the JS-rendered section of it).
+- You have the data but it's in a 1,000-page document and you need a schema → read `llm-extraction.md`.
+- The scraper needs to run unattended → read `production.md` once you have a source.
 
-> See `web-scraping` (parent) for the full ladder and the gating/ethics framing.
+> See `SKILL.md` for the full ladder and the gating/ethics framing.

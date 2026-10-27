@@ -1,6 +1,6 @@
 ---
 name: web-scraping
-description: Use when starting any web scraping or crawling job — orienting before writing a scraper, choosing between doing it yourself and a managed API, or triaging whether a 429 / 403 / silent-empty response is a real block or a rate-limit negotiation. Load this first; it indexes the sub-skills for the situation-specific questions.
+description: Use for any web scraping or crawling job — orienting before writing a scraper, finding where a site's data lives (API, embedded JSON, XHR/GraphQL, mobile app), getting a 403, challenge page or captcha, extracting structured records with an LLM, or running a scraper unattended that returns 200 with empty, wrong or poisoned data.
 ---
 
 # Web Scraping
@@ -20,10 +20,10 @@ Public, logged-out data, no cease-and-desist received, polite rate: that's the l
 Each rung adds complexity, cost, and maintenance. Most production jobs are solved at rungs 1–3. Never start at rung 5.
 
 1. **Find a sanctioned door.** Official API, `Accept: text/markdown`, sitemap, RSS, or the site's own agent endpoint (WebMCP). See the "AI access tiers" notes in the source guide for whether the site wants you to scrape at all.
-2. **Use the cheapest interface that works.** A flat endpoint the site already serves beats reverse-engineering a browser. See `web-scraping-data-sources` for the embedded-JSON, XHR/GraphQL, and mobile-API paths.
-3. **Make the HTTP request look like a coherent real client.** A non-browser stack with the right fingerprint beats a sloppy browser. See `web-scraping-blocked` only if you actually get a 403/challenge; see `web-scraping-blocked/proxies.md` only if the block survives a same-IP browser-vs-script test.
+2. **Use the cheapest interface that works.** A flat endpoint the site already serves beats reverse-engineering a browser. See `data-sources.md` for the embedded-JSON, XHR/GraphQL, and mobile-API paths.
+3. **Make the HTTP request look like a coherent real client.** A non-browser stack with the right fingerprint beats a sloppy browser. See `blocked.md` only if you actually get a 403/challenge; see `proxies.md` only if the block survives a same-IP browser-vs-script test.
 4. **Use a browser as a different identity, not a stronger one.** When HTML only renders after JS, or the data is gated by client-side hydration, switch to a C++-level browser with real fingerprint patches. Playwright-Stealth is no longer enough.
-5. **Use an LLM for unstructured extraction.** When the page is too varied for stable selectors, extract with a model. See `web-scraping-llm-extraction`.
+5. **Use an LLM for unstructured extraction.** When the page is too varied for stable selectors, extract with a model. See `llm-extraction.md`.
 6. **Use a managed API when the maintenance tax exceeds 2 days/month.** Measure cost per 1,000 *usable* records, not cost per request. Distrust vendor success-rate claims. Zyte, Firecrawl, Bright Data, ScrapingBee are the usual candidates.
 
 > Stop at the first rung that works. Each step down is cheaper, faster, and less likely to break the next time the site changes.
@@ -33,20 +33,20 @@ Each rung adds complexity, cost, and maintenance. Most production jobs are solve
 The most expensive mistake in scraping is treating every error as "they blocked me."
 
 - **429 is a negotiation, not a verdict.** Slow down, honour `Retry-After`, add jitter. Your identity was fine. The lockout is a pricing dial, and polling it does not extend the penalty (one feed found the time-remaining response carries the *original* countdown, not a fresh one).
-- **403 is a judgement.** Some layer — TLS, HTTP/2, IP, behaviour, vendor — has decided you are not a real client. Which layer? The cheapest way to find out is the same-IP browser-vs-script test (see `web-scraping-blocked`).
+- **403 is a judgement.** Some layer — TLS, HTTP/2, IP, behaviour, vendor — has decided you are not a real client. Which layer? The cheapest way to find out is the same-IP browser-vs-script test (see `blocked.md`).
 - **Caveat:** some limiters count your *identity* rather than your pace — a block on the first request that survives a slower cadence is back to the 403 question. If backing off changes the outcome, it's a rate limit. If it doesn't, it's a block.
-- **200 is not a green light.** A 200 with the challenge page, a 200 with an empty list, a 200 with stale data, and a 200 with poisoned data are all common silent failures. See `web-scraping-production`.
+- **200 is not a green light.** A 200 with the challenge page, a 200 with an empty list, a 200 with stale data, and a 200 with poisoned data are all common silent failures. See `production.md`.
 
-## 3. Sub-skills (load the one matching your situation)
+## 3. Reference files (read the one matching your situation)
 
-| You are here | Load |
+| You are here | Read |
 |---|---|
-| Figuring out *where* the data lives before writing a scraper (API, embedded JSON, XHR, mobile app) | `web-scraping-data-sources` |
-| Getting 403 / challenge / ban responses while a real browser gets through | `web-scraping-blocked` |
-| Turning messy scraped pages into structured output with a model, or running an agent on the live web | `web-scraping-llm-extraction` |
-| The scraper must run unattended, or it "succeeds" with empty / wrong / poisoned output | `web-scraping-production` |
+| Figuring out *where* the data lives before writing a scraper (API, embedded JSON, XHR, mobile app) | `data-sources.md` |
+| Getting 403 / challenge / ban responses while a real browser gets through | `blocked.md` |
+| Turning messy scraped pages into structured output with a model, or running an agent on the live web | `llm-extraction.md` |
+| The scraper must run unattended, or it "succeeds" with empty / wrong / poisoned output | `production.md` |
 
-Each sub-skill is independent; the parent is only loaded when you need the ladder above or the gating/ethics framing.
+Each file sits next to this one and stands alone. `blocked.md` links on to `proxies.md` and `vendors.md`; `data-sources.md` links on to `mobile-api.md`.
 
 ## 4. Silent-failure red flags (the failure modes that don't raise an exception)
 

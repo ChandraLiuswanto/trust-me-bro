@@ -52,11 +52,7 @@ rough idea ─► brainstorm ─► spec ─► "lgtm" ─► plan ─► plan r
 |---|---|
 | `sol-git-gud` | The pipeline above |
 | `pi-agents` | How Pi delegates to Paseo subagents: profiles, workspaces, prompts, handoffs, committees |
-| `web-scraping` | Where to start a scraping job; indexes the four below |
-| `web-scraping-data-sources` | Find the API, embedded JSON, or XHR before parsing HTML |
-| `web-scraping-blocked` | Which fingerprint layer is refusing you, and what to change |
-| `web-scraping-llm-extraction` | Model-based extraction, its costs, and prompt injection |
-| `web-scraping-production` | Unattended scrapers and their silent failures |
+| `web-scraping` | The scraping decision ladder and status-code triage, with reference files for finding the data source, getting past blocks (plus proxies and vendors), LLM extraction, and running unattended |
 | `writing-like-a-human` | Prose that doesn't read like a model wrote it |
 
 ## Requires
@@ -85,7 +81,7 @@ Then start a Pi session and hand it something vague.
 
 - [obra/superpowers](https://github.com/obra/superpowers) by Jesse Vincent,
   which this pipeline is built on
-- The web-scraping skills are distilled from Asad Ikram's
+- The web-scraping skill is distilled from Asad Ikram's
   [scraping guide](https://asadfix.github.io/scraping-guide/)
 - README layout borrowed from
   [phthomas/pstack-loki](https://github.com/phthomas/pstack-loki)

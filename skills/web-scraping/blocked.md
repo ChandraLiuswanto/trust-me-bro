@@ -1,19 +1,14 @@
----
-name: web-scraping-blocked
-description: Use when a real browser loads a site but the script gets a 403, a challenge page, or a captcha — and you have already confirmed the target is Tier 4+ on the difficulty ladder. Also use when you need to know which fingerprint layer (TLS, HTTP/2, JavaScript, behavioural) is actually refusing the request before changing anything.
----
-
 # Web Scraping — When You Are Blocked
 
 Distilled from Asad Ikram's guide (https://asadfix.github.io/scraping-guide/, 2026). Vendor and tool specifics age fast; the isolation procedure is durable.
 
 ## Core idea
 
-**Block ≠ block.** A "bot detection" can be a TLS rejection, an HTTP/2 rejection, an IP-reputation rejection, a behaviour rejection, or a vendor check — and the same site can run all five at once. The cheapest wins come from the cheapest checks first. Vendor mechanics and proxy taxonomies live in `vendors.md` and `proxies.md` (this skill); the order in which to consult them is below.
+**Block ≠ block.** A "bot detection" can be a TLS rejection, an HTTP/2 rejection, an IP-reputation rejection, a behaviour rejection, or a vendor check — and the same site can run all five at once. The cheapest wins come from the cheapest checks first. Vendor mechanics and proxy taxonomies live in `vendors.md` and `proxies.md`; the order in which to consult them is below.
 
 ## 0. Confirm you are actually at the right tier
 
-Before doing anything else, place the target on the difficulty ladder. Tier 1 jobs don't need this skill at all; Tier 5 jobs need everything.
+Before doing anything else, place the target on the difficulty ladder. Tier 1 jobs don't need this guide at all; Tier 5 jobs need everything.
 
 | Tier | Tell | Effort |
 |---|---|---|
@@ -33,7 +28,7 @@ This is the diagnostic that saves the week. Before changing anything, compare a 
 
 - **Script returns 403; real browser returns 200.** A fingerprint layer is refusing you. Walk §2 below.
 - **Script and browser both return 403 from this network.** The IP is bad. Move to `proxies.md` — pick a different exit type (residential, mobile) and rerun the comparison.
-- **Script and browser both return 200.** You weren't actually blocked; the page was Tier 3, not Tier 4. Load `web-scraping-data-sources` and look for the XHR endpoint.
+- **Script and browser both return 200.** You weren't actually blocked; the page was Tier 3, not Tier 4. Read `data-sources.md` and look for the XHR endpoint.
 
 > **Why this works.** It changes exactly one variable at a time. If the same script body, the same headers, and the same URL change outcome by changing only the transport, the transport is the variable. Hours spent tuning headers with a `requests` library, on a target that drops the TLS handshake at the load balancer, prove something that was already true.
 
@@ -97,7 +92,7 @@ A pass on the first request that fails the moment you scale is a behaviour block
 - **Same library, same everything, different profile → different outcome.** The profile is the variable; don't escalate to a browser yet.
 - **Script and browser both blocked from the same network.** IP is the variable; don't tune headers or fingerprint, switch exit type.
 - **Different endpoints on the same host require different headers / referers / UA.** Anti-bot is deployed per route by different teams, so a single profile that satisfies both can't exist. Stop looking for a better global profile and start diffing what you sent to each. This is the same reasoning that makes endpoint enumeration beat accepting the hardest one.
-- **The page you're stuck on is a 200 with no useful data, not a 403.** You weren't blocked; you were served a JS-rendered page from a non-JS client. Load `web-scraping-data-sources` instead.
+- **The page you're stuck on is a 200 with no useful data, not a 403.** You weren't blocked; you were served a JS-rendered page from a non-JS client. Read `data-sources.md` instead.
 - **You have spent more than 2 days/month on maintenance for a single target.** Walk to the parent skill, rung 6, and price a managed API against your own hours. (See `vendors.md` for the cost-per-usable-record framing.)
 
 ## 5. Two-trap rule
@@ -115,9 +110,9 @@ A pass on the first request that fails the moment you scale is a behaviour block
 
 ## 7. When this is the wrong skill
 
-- You can see the data in `view-source` → load `web-scraping-data-sources` (the data was already there).
-- The page is empty until JS runs and you're not blocked → load `web-scraping-data-sources` (it's Tier 3, not Tier 4).
-- The scraper is unreliable, returns empty / wrong / poisoned data → load `web-scraping-production` (it's a silent-failure problem, not a block problem).
-- The data is buried in unstructured text and you need a schema → load `web-scraping-llm-extraction`.
+- You can see the data in `view-source` → read `data-sources.md` (the data was already there).
+- The page is empty until JS runs and you're not blocked → read `data-sources.md` (it's Tier 3, not Tier 4).
+- The scraper is unreliable, returns empty / wrong / poisoned data → read `production.md` (it's a silent-failure problem, not a block problem).
+- The data is buried in unstructured text and you need a schema → read `llm-extraction.md`.
 
-> See `web-scraping` (parent) for the full decision ladder and the gating/ethics framing.
+> See `SKILL.md` for the full decision ladder and the gating/ethics framing.
