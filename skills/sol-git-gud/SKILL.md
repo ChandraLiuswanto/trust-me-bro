@@ -19,7 +19,7 @@ Record one workspace ID and absolute checkout path for the pipeline, following `
 
 ### Routing
 
-Every delegated agent uses Paseo provider **`pi`**. Claude families run through Pi's `claude-bridge`, never the Claude Code provider. The parent may use any provider.
+Every delegated agent uses Paseo provider **`pi`** with a **`fedora/`** model: pass `provider: "pi/fedora/<model>"` (e.g. `pi/fedora/opus`, `pi/fedora/sol`, `pi/fedora/astra`). Pi's `fedora` provider is the 9Router gateway; every family, Claude included, runs through it — never the Claude Code provider or a bare model ID. The parent may use any provider.
 
 The current orchestrator handles brainstorming/spec, implementation planning, coordination and final summary; keep its model and effort unchanged. The table governs delegated work. Sol means **GPT-6.1 Sol**; Astra means **GPT-6 Astra**.
 
@@ -36,7 +36,7 @@ Astra/Fable low is eligible for complex implementation only when the task is wel
 
 Choose one eligible model per assignment based on fit and availability; no family-percentage quota or mandatory Astra/Fable turn. Prefer cross-family review contrast when practical. When task complexity changes, re-evaluate the row and effort; update a suitable owner or hand off with ownership and context recorded. Original ownership never overrides routing eligibility.
 
-Discover current profiles, models, modes and effort IDs before launch; never guess IDs. An otherwise suitable `claude` profile must be re-materialized through Pi with compatible settings, not copied unchanged. Apply the table's effort, overriding profile defaults and updating reused agents when roles change. Unsupported effort requires a supported alternative; never silently use high or change parent/global settings.
+Discover current profiles, models, modes and effort IDs before launch; never guess IDs. An otherwise suitable `claude` profile must be re-materialized as `pi/fedora/<model>` with compatible settings, not copied unchanged. Apply the table's effort, overriding profile defaults and updating reused agents when roles change. Unsupported effort requires a supported alternative; never silently use high or change parent/global settings.
 
 On confirmed Claude usage-limit failure, record it and stop creating or prompting Claude-family agents for the rest of the five-hour window; no quota probes or artificial work. Substitute Sol or Astra only where the task's row permits, at its required effort; otherwise report a blocker. For other route failures, disclose an eligible same-role substitution or report a blocker. Never broaden the matrix to work around availability.
 
