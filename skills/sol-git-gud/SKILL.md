@@ -142,6 +142,7 @@ Use superpowers:subagent-driven-development for implementation discipline, but o
 - Follow TDD. Run task tests and commit each bead separately once green. Per-task commits remain the history; never squash them during autopilot.
 - Stage only explicit task paths; never `git add -A` or `git add .` in the shared worktree. Serialize Git mutations. On `index.lock`, wait and retry; never delete it.
 - Never push, pull, fetch or rebase.
+- Message the coordinator mid-turn only for a blocker or a fact another lane needs now (`send_agent_prompt` to the `source-agent-id` from your first prompt, `notifyOnFinish: false`); never for progress, commit notices or review requests. Everything else goes in the final message.
 - Close with `bd close "$ID"` only after green task tests and an existing task commit. These are bead exit criteria; no per-bead review is needed.
 
 Recheck `bd ready` until no open beads remain. Tests attached to an edit prove only that command's scope; still perform the prescribed targeted and broad verification. Do not close blocked or failing work merely to reach final review.
