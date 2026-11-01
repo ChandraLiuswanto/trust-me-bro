@@ -45,9 +45,9 @@ For a new delegation:
 2. If the user names a profile, select it. Otherwise choose by task fit; prefer a different provider family when a second opinion benefits from contrast.
 3. If no profile fits, proceed with Paseo provider discovery (`list_providers`, `list_models`) and tell the user which model you chose and why; do not stop to ask. Never guess provider, model, mode, or feature IDs.
 4. Materialize the selected profile into `create_agent`: join provider and model with the first slash only, so profile provider `pi` with model `fedora/opus` becomes `"pi/fedora/opus"`. Copy `modeId` and `thinkingOptionId` into `settings`, and copy the profile's `featureValues` into `settings.features`. **`create_agent` has no `profile` argument.**
-5. Give the agent a self-contained prompt: objective, known context, relevant paths, constraints, expected output, and whether edits are allowed.
+5. Give the agent a self-contained prompt: objective, known context, relevant paths, constraints, expected output, and whether edits are allowed. Include a mid-turn channel: for a blocker or a fact another agent needs now, send the parent one short `send_agent_prompt` (the `source-agent-id` from its first prompt, `notifyOnFinish: false`) and continue or wait; everything else, including the result, goes in the final message.
 6. Leave `notifyOnFinish` enabled. Continue useful work or yield; do not sleep or poll.
-7. Read the completed response and synthesize it for the user. If the finish notification is truncated, call `get_agent_activity` with the `agentId` for the full timeline.
+7. Read the completed response and synthesize it for the user. If the finish notification is truncated, call `get_agent_activity` with the `agentId` for the full timeline. A mid-turn message is not completion; act on it, then still wait for the finish notification.
 
 When this skill triggers, use Paseo MCP through codemode. If Paseo is unavailable, report the blocker and ask before using any other delegation mechanism.
 
