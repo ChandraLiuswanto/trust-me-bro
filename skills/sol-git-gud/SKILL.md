@@ -25,18 +25,18 @@ The current orchestrator handles brainstorming/spec, implementation planning, co
 
 | Task | Default | Alternatives | Effort |
 |---|---|---|---|
-| Independent plan review | Sol | Opus 5.5 · Astra · Fable 5.1 | Medium |
+| Independent plan review | Astra | Fable 5.1 | At least the planner's effort |
 | Complex implementation | Opus 5.5 · Sol | Astra · Fable 5.1 | Defaults: medium; alternatives: low only under the condition below |
 | Security, difficult debugging, ambiguous cross-cutting work | Opus 5.5 | Astra · Fable 5.1 | Medium |
 | Simple, bounded, low-risk implementation, tests or docs | Sonnet 5.5 | Sol | Low |
-| Final review and optional re-review | Sol | Opus 5.5 · Astra · Fable 5.1 | Medium |
+| Final review and optional re-review | Astra | Fable 5.1 | At least the planner's effort |
 | Review fixes | Original implementation owner | Suitable replacement if needed | Match task complexity |
 
 Astra/Fable low is eligible for complex implementation only when the task is well-specified, decomposed and backed by strong tests. Security, difficult debugging and ambiguous cross-cutting tasks use their dedicated medium-effort row regardless of decomposition or tests.
 
 Choose one eligible model per assignment based on fit and availability; no family-percentage quota or mandatory Astra/Fable turn. Prefer cross-family review contrast when practical. When task complexity changes, re-evaluate the row and effort; update a suitable owner or hand off with ownership and context recorded. Original ownership never overrides routing eligibility.
 
-Discover current profiles, models, modes and effort IDs before launch; never guess IDs. An otherwise suitable `claude` profile must be re-materialized as `pi/fedora/<model>` with compatible settings, not copied unchanged. Apply the table's effort, overriding profile defaults and updating reused agents when roles change. Unsupported effort requires a supported alternative; never silently use high or change parent/global settings.
+Discover current profiles, models, modes and effort IDs before launch; never guess IDs. An otherwise suitable `claude` profile must be re-materialized as `pi/fedora/<model>` with compatible settings, not copied unchanged. Apply the table's effort, overriding profile defaults and updating reused agents when roles change. Unsupported effort requires a supported alternative; never silently use high, except to match the planner's effort for review, or change parent/global settings.
 
 On confirmed Claude usage-limit failure, record it and stop creating or prompting Claude-family agents for the rest of the five-hour window; no quota probes or artificial work. Substitute Sol or Astra only where the task's row permits, at its required effort; otherwise report a blocker. For other route failures, disclose an eligible same-role substitution or report a blocker. Never broaden the matrix to work around availability.
 
