@@ -55,6 +55,24 @@ rough idea ─► brainstorm ─► spec ─► "lgtm" ─► plan ─► plan r
 | `web-scraping` | The scraping decision ladder and status-code triage, with reference files for finding the data source, getting past blocks (plus proxies and vendors), LLM extraction, and running unattended |
 | `writing-like-a-human` | Prose that doesn't read like a model wrote it |
 
+### Host-scoped skills
+
+Skills that drive Paseo live in `skills-paseo/` and load only when Pi runs
+under Paseo (`PASEO_AGENT_ID` is set). The bundled `host-skills` extension adds
+them, plus Paseo's own `~/.agents/skills/paseo`, at startup. An Orca session
+(`ORCA_PANE_KEY`) loads `skills-orca/` instead, when that folder exists. Shared
+skills in `skills/` load everywhere.
+
+Force a set with `PI_HOST_SKILLS=paseo`, `PI_HOST_SKILLS=orca` or
+`PI_HOST_SKILLS=none`. To keep Paseo's skill out of other sessions, exclude it
+in `~/.pi/agent/settings.json`:
+
+```json
+"skills": ["-/home/<you>/.agents/skills/paseo/SKILL.md"]
+```
+
+Check isolation with `bash tests/host-skills.sh --assert`.
+
 ## Requires
 
 - [Pi](https://pi.dev) with [SoL-Pi](https://github.com/NVlabs/SoL-Pi)

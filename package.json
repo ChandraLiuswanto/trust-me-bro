@@ -8,8 +8,18 @@
     "type": "git",
     "url": "https://github.com/ChandraLiuswanto/trust-me-bro.git"
   },
-  "keywords": ["pi-package", "skills", "agents", "paseo"],
+  "keywords": [
+    "pi-package",
+    "skills",
+    "agents",
+    "paseo"
+  ],
   "pi": {
-    "skills": ["./skills"]
+    "skills": [
+      "./skills"
+    ],
+    "extensions": [
+      "./extensions"
+    ]
   }
 }
