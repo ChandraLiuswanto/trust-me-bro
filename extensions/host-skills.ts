@@ -1,7 +1,9 @@
 // Load host-specific skills only when Pi runs under that host.
 //
 //   Paseo  (PASEO_AGENT_ID set) -> skills-paseo/ + Paseo's own ~/.agents/skills/paseo
-//   Orca   (ORCA_PANE_KEY set)  -> skills-orca/ (if present)
+//   Orca   (ORCA_PANE_KEY, ORCA_AGENT_SESSION_ID or ORCA_CLI_BIN_DIR set) -> skills-orca/
+//          Terminal panes set ORCA_PANE_KEY; Orca's chat view resumes sessions as
+//          `pi --mode rpc` with ORCA_AGENT_SESSION_ID/ORCA_CLI_BIN_DIR but no pane key.
 //
 // Shared skills in skills/ load everywhere through the package manifest.
 // Override detection with PI_HOST_SKILLS=paseo,orca or PI_HOST_SKILLS=none.
@@ -21,7 +23,8 @@ const HOSTS: Record<Host, { detect: () => boolean; paths: () => string[] }> = {
 		paths: () => [join(repoDir, "skills-paseo"), join(homedir(), ".agents", "skills", "paseo")],
 	},
 	orca: {
-		detect: () => Boolean(process.env.ORCA_PANE_KEY),
+		detect: () =>
+			Boolean(process.env.ORCA_PANE_KEY || process.env.ORCA_AGENT_SESSION_ID || process.env.ORCA_CLI_BIN_DIR),
 		paths: () => [join(repoDir, "skills-orca")],
 	},
 };

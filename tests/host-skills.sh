@@ -12,7 +12,7 @@ fail=0
 skills_for() { # $1 = label, rest = env assignments
   local label=$1; shift
   { echo '{"id":"1","type":"get_commands"}'; sleep 20; } |
-    env -u PASEO_AGENT_ID -u PASEO_HOME -u ORCA_PANE_KEY -u PI_HOST_SKILLS "$@" \
+    env -u PASEO_AGENT_ID -u PASEO_HOME -u ORCA_PANE_KEY -u ORCA_AGENT_SESSION_ID -u ORCA_CLI_BIN_DIR -u PI_HOST_SKILLS "$@" \
       timeout 30 pi --mode rpc --no-session 2>"/tmp/host-skills-$label.err" |
     python3 -c '
 import sys, json
@@ -49,6 +49,7 @@ check() { # $1 label, $2 expect paseo (yes/no), $3 expect orca (yes/no), rest en
 check plain    no  no
 check paseo    yes no  PASEO_AGENT_ID=test
 check orca     no  yes ORCA_PANE_KEY=test
+check orcachat no  yes ORCA_AGENT_SESSION_ID=test ORCA_CLI_BIN_DIR=/tmp
 check override yes no  PI_HOST_SKILLS=paseo
 check both     yes yes PI_HOST_SKILLS=paseo,orca
 check none     no  no  PASEO_AGENT_ID=test ORCA_PANE_KEY=test PI_HOST_SKILLS=none
