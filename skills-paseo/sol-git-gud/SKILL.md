@@ -138,7 +138,7 @@ Never use `--deps "blocks:A"`: that direction is reversed; the typed dependency 
 
 Use superpowers:subagent-driven-development for implementation discipline, but override its fresh-agent and per-bead two-stage review defaults: reuse owners and **do not launch per-bead reviewers**. Dispatch independent ready lanes concurrently; blocked chains advance as blockers close. Each worker prompt requires:
 
-- Check live task ownership and dependencies. Coordinator assigns with `bd update "$ID" --assignee "$AGENT_ID"`; worker atomically claims only assigned ready work with `bd --actor "$AGENT_ID" ready --assignee "$AGENT_ID" --claim --json`. If nothing is ready, wait; never take another owner's fix or bypass blockers.
+- Check live task ownership and dependencies. Coordinator assigns with `bd update "$ID" --assignee "$AGENT_ID"`; the worker takes only assigned ready work: `bd ready --assignee "$AGENT_ID" --json` lists it. Then claim one ID with `bd --actor "$AGENT_ID" update "$ID" --claim --json`. `ready --claim` cannot be combined with `--assignee`. If nothing is ready, wait; never take another owner's fix or bypass blockers.
 - Follow TDD. Run task tests and commit each bead separately once green. Per-task commits remain the history; never squash them during autopilot.
 - Stage only explicit task paths; never `git add -A` or `git add .` in the shared worktree. Serialize Git mutations. On `index.lock`, wait and retry; never delete it.
 - Never push, pull, fetch or rebase.

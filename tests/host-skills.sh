@@ -5,6 +5,7 @@
 set -u
 ASSERT=${1:-}
 PASEO_ONLY=(skill:pi-agents skill:sol-git-gud skill:paseo)
+ORCA_ONLY=(skill:orca-agents skill:sol-git-gud-orca)
 SHARED=(skill:web-scraping skill:writing-like-a-human)
 fail=0
 
@@ -24,25 +25,33 @@ for line in sys.stdin:
 '
 }
 
-check() { # $1 label, $2 expect paseo skills (yes/no), rest env
-  local label=$1 want=$2; shift 2
-  local got; got=$(skills_for "$label" "$@")
-  local paseo_seen=() s
-  for s in "${PASEO_ONLY[@]}"; do [[ " $got " == *" $s "* ]] && paseo_seen+=("$s"); done
-  local shared_missing=()
-  for s in "${SHARED[@]}"; do [[ " $got " == *" $s "* ]] || shared_missing+=("$s"); done
-  printf '%-9s paseo-skills=[%s] shared-missing=[%s]\n' "$label" "${paseo_seen[*]-}" "${shared_missing[*]-}"
-  if [[ -z $got ]]; then echo "  !! no response (see /tmp/host-skills-$label.err)"; fail=1; return; fi
-  if [[ $want == yes && ${#paseo_seen[@]} -ne ${#PASEO_ONLY[@]} ]]; then fail=1; echo "  !! expected all Paseo skills"; fi
-  if [[ $want == no && ${#paseo_seen[@]} -ne 0 ]]; then fail=1; echo "  !! Paseo skills leaked"; fi
-  if [[ ${#shared_missing[@]} -ne 0 ]]; then fail=1; echo "  !! shared skills missing"; fi
+# expect_set <label> <yes|no> <seen-count> <total> <name>
+expect_set() {
+  local label=$1 want=$2 seen=$3 total=$4 name=$5
+  if [[ $want == yes && $seen -ne $total ]]; then fail=1; echo "  !! expected all $name skills"; fi
+  if [[ $want == no && $seen -ne 0 ]]; then fail=1; echo "  !! $name skills leaked"; fi
 }
 
-check plain    no
-check paseo    yes PASEO_AGENT_ID=test
-check orca     no  ORCA_PANE_KEY=test
-check override yes PI_HOST_SKILLS=paseo
-check none     no  PASEO_AGENT_ID=test PI_HOST_SKILLS=none
+check() { # $1 label, $2 expect paseo (yes/no), $3 expect orca (yes/no), rest env
+  local label=$1 want_p=$2 want_o=$3; shift 3
+  local got; got=$(skills_for "$label" "$@")
+  local p=() o=() missing=() s
+  for s in "${PASEO_ONLY[@]}"; do [[ " $got " == *" $s "* ]] && p+=("$s"); done
+  for s in "${ORCA_ONLY[@]}"; do [[ " $got " == *" $s "* ]] && o+=("$s"); done
+  for s in "${SHARED[@]}"; do [[ " $got " == *" $s "* ]] || missing+=("$s"); done
+  printf '%-9s paseo=[%s] orca=[%s] shared-missing=[%s]\n' "$label" "${p[*]-}" "${o[*]-}" "${missing[*]-}"
+  if [[ -z $got ]]; then echo "  !! no response (see /tmp/host-skills-$label.err)"; fail=1; return; fi
+  expect_set "$label" "$want_p" ${#p[@]} ${#PASEO_ONLY[@]} Paseo
+  expect_set "$label" "$want_o" ${#o[@]} ${#ORCA_ONLY[@]} Orca
+  if [[ ${#missing[@]} -ne 0 ]]; then fail=1; echo "  !! shared skills missing"; fi
+}
+
+check plain    no  no
+check paseo    yes no  PASEO_AGENT_ID=test
+check orca     no  yes ORCA_PANE_KEY=test
+check override yes no  PI_HOST_SKILLS=paseo
+check both     yes yes PI_HOST_SKILLS=paseo,orca
+check none     no  no  PASEO_AGENT_ID=test ORCA_PANE_KEY=test PI_HOST_SKILLS=none
 
 [[ $ASSERT == --assert ]] && { ((fail)) && echo FAIL || echo PASS; exit $fail; }
 exit 0

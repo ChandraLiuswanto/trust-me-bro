@@ -50,8 +50,10 @@ rough idea ─► brainstorm ─► spec ─► "lgtm" ─► plan ─► plan r
 
 | Skill | Job |
 |---|---|
-| `sol-git-gud` | The pipeline above |
-| `pi-agents` | How Pi delegates to Paseo subagents: profiles, workspaces, prompts, handoffs, committees |
+| `sol-git-gud` | The pipeline above, delegating through Paseo (loads under Paseo) |
+| `pi-agents` | How Pi delegates to Paseo subagents: profiles, workspaces, prompts, handoffs, committees (loads under Paseo) |
+| `sol-git-gud-orca` | The same pipeline, delegating through Orca orchestration workers (loads under Orca) |
+| `orca-agents` | How Pi delegates to Orca workers: model selection for Pi, `worker_done` handling, follow-ups, cleanup (loads under Orca) |
 | `web-scraping` | The scraping decision ladder and status-code triage, with reference files for finding the data source, getting past blocks (plus proxies and vendors), LLM extraction, and running unattended |
 | `writing-like-a-human` | Prose that doesn't read like a model wrote it |
 
@@ -60,8 +62,12 @@ rough idea ─► brainstorm ─► spec ─► "lgtm" ─► plan ─► plan r
 Skills that drive Paseo live in `skills-paseo/` and load only when Pi runs
 under Paseo (`PASEO_AGENT_ID` is set). The bundled `host-skills` extension adds
 them, plus Paseo's own `~/.agents/skills/paseo`, at startup. An Orca session
-(`ORCA_PANE_KEY`) loads `skills-orca/` instead, when that folder exists. Shared
-skills in `skills/` load everywhere.
+(`ORCA_PANE_KEY`) loads `skills-orca/` instead. Shared skills in `skills/` load
+everywhere.
+
+Orca refuses `--model` for Pi workers, so `orca-agents` starts each worker as
+`orca terminal create --command "pi --model fedora/<m> --thinking <lvl>"` and
+then hands it work with `orca orchestration worker-start --terminal <handle>`.
 
 Force a set with `PI_HOST_SKILLS=paseo`, `PI_HOST_SKILLS=orca` or
 `PI_HOST_SKILLS=none`. To keep Paseo's skill out of other sessions, exclude it
@@ -76,7 +82,8 @@ Check isolation with `bash tests/host-skills.sh --assert`.
 ## Requires
 
 - [Pi](https://pi.dev) with [SoL-Pi](https://github.com/NVlabs/SoL-Pi)
-- [Paseo](https://paseo.sh) with its MCP server available to Pi
+- [Paseo](https://paseo.sh) with its MCP server available to Pi, or
+  [Orca](https://github.com/stablyai/orca) (tested with 1.4.252 `orca serve`)
 - [beads](https://github.com/steveyegge/beads) (`bd`) on your PATH
 - [obra/superpowers](https://github.com/obra/superpowers): `sol-git-gud` calls
   its `brainstorming`, `writing-plans`, `subagent-driven-development` and
