@@ -69,6 +69,12 @@ Orca refuses `--model` for Pi workers, so `orca-agents` starts each worker as
 `orca terminal create --command "pi --model fedora/<m> --thinking <lvl>"` and
 then hands it work with `orca orchestration worker-start --terminal <handle>`.
 
+The `orca-mail` extension makes worker results arrive like Paseo's. Orca wakes a
+coordinator by typing "You have N orchestration messages. Run `orca orchestration
+check`". The extension runs that check itself and replaces the notice with the
+worker reports. A notice whose mailbox is already empty is dropped. Disable it
+with `PI_ORCA_MAIL=off`.
+
 Force a set with `PI_HOST_SKILLS=paseo`, `PI_HOST_SKILLS=orca` or
 `PI_HOST_SKILLS=none`. To keep Paseo's skill out of other sessions, exclude it
 in `~/.pi/agent/settings.json`:
