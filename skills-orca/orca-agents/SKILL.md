@@ -50,17 +50,18 @@ orca orchestration worker-start --worktree current --terminal "$H" \
 ## Core Contract
 
 1. Choose the model per assignment from task fit. Prefer a different family for a second opinion. Tell the user which model you chose and why.
-2. Give the worker a self-contained spec: objective, known context, absolute paths, constraints, expected output, and whether edits are allowed. Orca injects the reporting preamble (`worker_done`, `ask`), so do not restate those mechanics.
+2. Give the worker a self-contained spec: objective, known context, absolute paths, constraints, expected output, and whether edits are allowed. Orca injects the reporting preamble (`worker_done`, `ask`), so do not restate those mechanics. Never write "do not run orca commands" in a spec: the worker obeys it, skips `worker_done`, and Orca escalates "stopped without reporting". Restrict specific actions instead ("do not start workers or edit files").
 3. Start the worker or workers, record `dispatchId`, `taskId`, terminal handle and model in your plan, then end your turn.
-4. When woken, run `orca orchestration check --json` to consume your mail. Each `worker_done` carries `taskId`, `dispatchId`, a subject and a body. If the body is not enough, read the full answer with `orca orchestration worker-read --dispatch <id> --source auto --json`.
+4. When woken in a chat, each message arrives inline, whole, and already consumed: act on it and do not run `check`. Run `orca orchestration check --json` only when the wake names a `check` command (terminal sessions, or a message too large for chat). Each `worker_done` carries `taskId`, `dispatchId`, a subject and a body. If the body is not enough, read the full answer with `orca orchestration worker-read --dispatch <id> --source auto --json`.
 5. Answer `question` mail with `orca orchestration reply --id <msg_id> --body …`. A question is not completion; keep waiting for `worker_done`.
 6. Synthesize the results for the user and state your recommendation. Never paste raw worker output.
 
 ## Follow-ups and Cleanup
 
-- **Continue the same conversation:** start a new task on the same terminal: `worker-start --worktree current --terminal <H> --spec-file …`. The Pi session keeps its context and model. Do not create a new worker for a follow-up.
-- **Guidance mid-task:** `orca orchestration send --to dispatch:<id> --subject … --body …`.
-- **Change effort or model for a reused worker:** before the next `worker-start`, run `orca terminal send --terminal <H> --text "/thinking medium" --enter` or `--text "/model fedora/sol" --enter`.
+- **Talk to a worker, in any state:** `orca orchestration send --to dispatch:<id> --subject … --body …`. A working worker gets it when its current turn ends. A finished or closed worker gets it as a follow-up Task on the same terminal (receipt `delivery: follow_up`, new `dispatchId`), keeps its Pi context and model, and replies with `worker_done`. Do not create a new worker for a follow-up.
+- **Never address a terminal handle.** `send --to term_…` lands in a terminal-only mailbox that nothing wakes; it stays unread until the agent runs `check` itself, and is lost when the terminal closes. Never steer by typing task text into a worker's terminal either.
+- **Keep a worker open for the user:** pass `--keep-open` to `worker-start`, or run `orca orchestration worker-keep-open --dispatch <id>` later.
+- **Change effort or model for a reused worker:** while it is idle, before the next follow-up, run `orca terminal send --terminal <H> --text "/thinking medium" --enter` or `--text "/model fedora/sol" --enter`.
 - **One pending task per terminal.** Queue follow-ups for a busy worker.
 - **Cleanup:** terminals you created stay open after `worker_done` (`worker-release` reports `retained`/`external_terminal`). Close each finished helper with `orca terminal close --terminal <H> --json`. Keep ongoing advisors open. Never close your own terminal or remove the worktree.
 - **Stop runaway work:** `orca orchestration worker-stop --dispatch <id>`.
@@ -84,10 +85,10 @@ Write every spec and follow-up as human-readable prose with normal word spacing 
 |---|---|
 | One new task | One worker (Pi terminal on the chosen model, then `worker-start --terminal`) |
 | Several independent tasks | Start all workers in one bash call, end the turn |
-| Continue the same worker | New `worker-start` on its terminal handle |
+| Continue the same worker | `send --to dispatch:<last dispatchId>` |
 | Read-only advice or review | Current worktree; the spec prohibits edits |
 | Second opinion / advisor | One read-only worker on a contrasting model family; it returns a judgment, you decide |
-| Hand off the current task | One worker with a full handoff briefing; tell the user its terminal handle |
+| Hand off the current task, nothing comes back | Not a worker: `orca worktree create --no-parent --agent <id> --prompt "<briefing>" --json` (or `orca agent launch` in this checkout); tell the user its handle and end your turn |
 | Hard or stuck problem (committee) | Two read-only workers on different families, same spec, in parallel; compare and synthesize |
 | Explicitly requested isolated checkouts | `worker-start --worktree new-child` |
 
@@ -103,7 +104,10 @@ The receiving worker starts with zero context. Include the objective, current st
 | `worker-start --agent pi --model fedora/x` | Refused; create a `pi --model` terminal, then `--terminal` |
 | `--agent pi` and assuming a model | It runs Pi's default; launch your own terminal to choose |
 | Sleeping or polling `worker-show` | End the turn; Orca wakes you |
-| New worker for a follow-up | Reuse the terminal handle |
+| `orca agent launch` for work that must report back | It has no Dispatch, so it never sends `worker_done` and mail to it is never delivered; use `worker-start` |
+| `send --to term_…` or typing into a worker's terminal | `send --to dispatch:<id>` |
+| Running `check` after an inline chat wake | The message is already consumed; act on it |
+| New worker for a follow-up | `send --to dispatch:<id>` on the existing worker |
 | New worktree per task | `--worktree current` unless the user asks for isolation |
 | Leaving helper terminals open | `orca terminal close` after the final result |
 | Returning raw worker output | Synthesize and recommend |
