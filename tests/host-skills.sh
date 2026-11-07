@@ -5,7 +5,8 @@
 set -u
 ASSERT=${1:-}
 PASEO_ONLY=(skill:pi-agents skill:sol-git-gud skill:paseo)
-ORCA_ONLY=(skill:orca-agents skill:sol-git-gud-orca)
+ORCA_ONLY=(skill:orca-agents skill:sol-git-gud-orca skill:orca-cli skill:orca-computer-use)
+NEVER=(skill:orchestration)
 SHARED=(skill:web-scraping skill:writing-like-a-human)
 fail=0
 
@@ -39,6 +40,7 @@ check() { # $1 label, $2 expect paseo (yes/no), $3 expect orca (yes/no), rest en
   for s in "${PASEO_ONLY[@]}"; do [[ " $got " == *" $s "* ]] && p+=("$s"); done
   for s in "${ORCA_ONLY[@]}"; do [[ " $got " == *" $s "* ]] && o+=("$s"); done
   for s in "${SHARED[@]}"; do [[ " $got " == *" $s "* ]] || missing+=("$s"); done
+  for s in "${NEVER[@]}"; do [[ " $got " == *" $s "* ]] && { fail=1; echo "  !! $s should not load"; }; done
   printf '%-9s paseo=[%s] orca=[%s] shared-missing=[%s]\n' "$label" "${p[*]-}" "${o[*]-}" "${missing[*]-}"
   if [[ -z $got ]]; then echo "  !! no response (see /tmp/host-skills-$label.err)"; fail=1; return; fi
   expect_set "$label" "$want_p" ${#p[@]} ${#PASEO_ONLY[@]} Paseo

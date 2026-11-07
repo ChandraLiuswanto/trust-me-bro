@@ -72,8 +72,15 @@ then hands it work with `orca orchestration worker-start --terminal <handle>`.
 The `orca-mail` extension makes worker results arrive like Paseo's. Orca wakes a
 coordinator by typing "You have N orchestration messages. Run `orca orchestration
 check`". The extension runs that check itself and replaces the notice with the
-worker reports. A notice whose mailbox is already empty is dropped. Disable it
-with `PI_ORCA_MAIL=off`.
+worker reports. A notice whose mailbox is already empty is dropped. It also puts each running worker in
+Orca's subagent rows under the coordinator, labelled with the task title and
+model, the way Paseo shows its subagent pill. A row clears when that worker
+reports `worker_done`. Disable both with `PI_ORCA_MAIL=off`.
+
+Orca installs its `orca-cli`, `orca-computer-use` and `orchestration` skills into the
+shared `~/.agents/skills`. Exclude all three in `settings.json`. `host-skills` adds
+`orca-cli` and `orca-computer-use` back under Orca. It leaves out `orchestration`
+because, for Pi, that skill competes with `orca-agents`, which loads it on demand.
 
 Force a set with `PI_HOST_SKILLS=paseo`, `PI_HOST_SKILLS=orca` or
 `PI_HOST_SKILLS=none`. To keep Paseo's skill out of other sessions, exclude it

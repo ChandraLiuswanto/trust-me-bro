@@ -32,7 +32,7 @@ Your first `worker-start` with `--spec` creates and binds a Run for you. Later s
 `worker-start --agent pi --model …` is **refused** (`Agent pi does not support launch-time model selection`). With plain `--agent pi`, the worker silently inherits Pi's default model. To control the model and effort, start Pi in a terminal yourself, then dispatch to that terminal:
 
 ```bash
-H=$(orca terminal create --worktree current --title "[Review] Security" \
+H=$(orca terminal create --worktree current --title "[Review] Security · fedora/astra" \
       --command "pi --model fedora/astra --thinking high" --json \
     | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["terminal"]["handle"])')
 orca terminal wait --terminal "$H" --for tui-idle --timeout-ms 90000 --json >/dev/null
@@ -42,6 +42,7 @@ orca orchestration worker-start --worktree current --terminal "$H" \
 
 - Models go through the `fedora/` gateway (`fedora/opus`, `fedora/sol`, `fedora/astra`, and so on). To list the IDs, run `pi --list-models fedora`. Thinking levels are `off|minimal|low|medium|high|xhigh|max`. Never guess an ID.
 - Read the handle from the receipt's `terminal.handle` field (inspect the JSON once if the shape differs).
+- Title each terminal `"<role> · fedora/<model>"`. Always pass `--task-title` too. Orca's subagent rows under your agent show the task title and model.
 - Write the spec to a file and pass `--spec-file`, so quotes and backticks need no escaping.
 - `--agent pi` without a terminal is acceptable only when the default model is fine. If the user names another agent (`claude`, `codex`), use `--agent <id>`, and `--model` where Orca supports it.
 - Start every independent worker in the same bash call, then **end your turn**. Orca wakes you with each worker's `worker_done`. Never sleep, poll `worker-show`, or block with `check --wait`.

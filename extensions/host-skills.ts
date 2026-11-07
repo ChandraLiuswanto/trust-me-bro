@@ -25,7 +25,14 @@ const HOSTS: Record<Host, { detect: () => boolean; paths: () => string[] }> = {
 	orca: {
 		detect: () =>
 			Boolean(process.env.ORCA_PANE_KEY || process.env.ORCA_AGENT_SESSION_ID || process.env.ORCA_CLI_BIN_DIR),
-		paths: () => [join(repoDir, "skills-orca")],
+		// Orca installs orca-cli/orca-computer-use into the shared ~/.agents/skills; settings.json
+		// excludes them globally and they come back here. Orca's own `orchestration` skill stays
+		// out: for Pi it competes with orca-agents, which reads it on demand via `orca skills get`.
+		paths: () => [
+			join(repoDir, "skills-orca"),
+			join(homedir(), ".agents", "skills", "orca-cli"),
+			join(homedir(), ".agents", "skills", "orca-computer-use"),
+		],
 	},
 };
 
