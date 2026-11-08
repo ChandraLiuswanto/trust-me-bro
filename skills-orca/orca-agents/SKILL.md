@@ -27,6 +27,20 @@ Use the `orca` CLI through `bash`. Inside an Orca pane, `orca` resolves to the r
 
 Your first `worker-start` with `--spec` creates and binds a Run for you. Later starts join that same Run automatically.
 
+## Chat or Terminal Surface
+
+The surface follows from whether the result must come back to you:
+
+| Result comes back to you? | Launch | Surface |
+|---|---|---|
+| Yes (review, second opinion, committee, pipeline stage) | `orca orchestration worker-start` | Always a terminal for Pi, with or without `--model`, in `current` or `new-child` |
+| No (handoff, "open a Pi chat", the user will talk to it) | `orca agent launch --agent pi --surface chat --prompt "<briefing>" --json` | Chat (receipt `outcome.kind: "structured"`) |
+
+- A Pi chat runs Pi's default model. `agent launch --agent pi --model …` is refused, like `worker-start`.
+- A chat has no Dispatch. It never sends `worker_done`, and `worker-start --terminal <chat handle>` fails with `terminal_handle_stale`.
+- When the user asks for a chat but the work must report back, use a terminal worker and tell the user in one sentence why it is a terminal.
+- In a new worktree, use `orca worktree create --name <name> --no-parent --agent pi --surface chat --prompt "<briefing>" --json`.
+
 ## Launching a Pi Worker on a Chosen Model
 
 `worker-start --agent pi --model …` is **refused** (`Agent pi does not support launch-time model selection`). With plain `--agent pi`, the worker silently inherits Pi's default model. To control the model and effort, start Pi in a terminal yourself, then dispatch to that terminal:
@@ -88,7 +102,8 @@ Write every spec and follow-up as human-readable prose with normal word spacing 
 | Continue the same worker | `send --to dispatch:<last dispatchId>` |
 | Read-only advice or review | Current worktree; the spec prohibits edits |
 | Second opinion / advisor | One read-only worker on a contrasting model family; it returns a judgment, you decide |
-| Hand off the current task, nothing comes back | Not a worker: `orca worktree create --no-parent --agent <id> --prompt "<briefing>" --json` (or `orca agent launch` in this checkout); tell the user its handle and end your turn |
+| Hand off the current task, nothing comes back | Not a worker: a chat via `orca agent launch --agent pi --surface chat --prompt "<briefing>" --json` in this checkout, or `orca worktree create --no-parent --agent <id> --surface chat --prompt "<briefing>" --json` for a new one; tell the user its handle and end your turn |
+| User asks to open a Pi chat | `agent launch --surface chat`; if it must report back, a terminal worker instead, and say why |
 | Hard or stuck problem (committee) | Two read-only workers on different families, same spec, in parallel; compare and synthesize |
 | Explicitly requested isolated checkouts | `worker-start --worktree new-child` |
 
@@ -104,6 +119,7 @@ The receiving worker starts with zero context. Include the objective, current st
 | `worker-start --agent pi --model fedora/x` | Refused; create a `pi --model` terminal, then `--terminal` |
 | `--agent pi` and assuming a model | It runs Pi's default; launch your own terminal to choose |
 | Sleeping or polling `worker-show` | End the turn; Orca wakes you |
+| `terminal create --command pi` for a handoff the user will chat with | `agent launch --surface chat`; terminals are only for workers that report back |
 | `orca agent launch` for work that must report back | It has no Dispatch, so it never sends `worker_done` and mail to it is never delivered; use `worker-start` |
 | `send --to term_…` or typing into a worker's terminal | `send --to dispatch:<id>` |
 | Running `check` after an inline chat wake | The message is already consumed; act on it |
