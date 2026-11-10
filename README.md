@@ -50,10 +50,8 @@ rough idea ─► brainstorm ─► spec ─► "lgtm" ─► plan ─► plan r
 
 | Skill | Job |
 |---|---|
-| `sol-git-gud` | The pipeline above, delegating through Paseo (loads under Paseo) |
-| `pi-agents` | How Pi delegates to Paseo subagents: profiles, workspaces, prompts, handoffs, committees (loads under Paseo) |
-| `sol-git-gud-orca` | The same pipeline, delegating through Orca orchestration workers (loads under Orca) |
-| `orca-agents` | How Pi delegates to Orca workers: model selection for Pi, `worker_done` handling, follow-ups, cleanup (loads under Orca) |
+| `git-gud` | The pipeline above. Under Paseo it delegates through Paseo; under Orca, through Orca orchestration workers |
+| `pi-agents` | How Pi delegates to subagents. Under Paseo: profiles, workspaces, prompts, handoffs, committees. Under Orca: model selection for Pi, `worker_done` handling, follow-ups, cleanup |
 | `web-scraping` | The scraping decision ladder and status-code triage, with reference files for finding the data source, getting past blocks (plus proxies and vendors), LLM extraction, and running unattended |
 | `writing-like-a-human` | Prose that doesn't read like a model wrote it |
 
@@ -65,7 +63,10 @@ them, plus Paseo's own `~/.agents/skills/paseo`, at startup. An Orca session
 (`ORCA_PANE_KEY`) loads `skills-orca/` instead. Shared skills in `skills/` load
 everywhere.
 
-Orca refuses `--model` for Pi workers, so `orca-agents` starts each worker as
+Both hosts ship `git-gud` and `pi-agents` under the same names, so
+prompts and cross-references work unchanged; only the host's copy loads.
+
+Orca refuses `--model` for Pi workers, so Orca's `pi-agents` starts each worker as
 `orca terminal create --command "pi --model fedora/<m> --thinking <lvl>"` and
 then hands it work with `orca orchestration worker-start --terminal <handle>`.
 
@@ -80,10 +81,11 @@ reports `worker_done`. Disable both with `PI_ORCA_MAIL=off`.
 Orca installs its `orca-cli`, `orca-computer-use` and `orchestration` skills into the
 shared `~/.agents/skills`. Exclude all three in `settings.json`. `host-skills` adds
 `orca-cli` and `orca-computer-use` back under Orca. It leaves out `orchestration`
-because, for Pi, that skill competes with `orca-agents`, which loads it on demand.
+because, for Pi, that skill competes with `pi-agents`, which loads it on demand.
 
 Force a set with `PI_HOST_SKILLS=paseo`, `PI_HOST_SKILLS=orca` or
-`PI_HOST_SKILLS=none`. To keep Paseo's skill out of other sessions, exclude it
+`PI_HOST_SKILLS=none`. With `paseo,orca`, Paseo's `git-gud` and `pi-agents` win
+the name collision and Orca's copies are skipped. To keep Paseo's skill out of other sessions, exclude it
 in `~/.pi/agent/settings.json`:
 
 ```json
@@ -98,11 +100,11 @@ Check isolation with `bash tests/host-skills.sh --assert`.
 - [Paseo](https://paseo.sh) with its MCP server available to Pi, or
   [Orca](https://github.com/stablyai/orca) (tested with 1.4.252 `orca serve`)
 - [beads](https://github.com/steveyegge/beads) (`bd`) on your PATH
-- [obra/superpowers](https://github.com/obra/superpowers): `sol-git-gud` calls
+- [obra/superpowers](https://github.com/obra/superpowers): `git-gud` calls
   its `brainstorming`, `writing-plans`, `subagent-driven-development` and
   `finishing-a-development-branch` skills
 
-The routing table in `sol-git-gud` names the models I run (Sol, Astra, Opus,
+The routing table in `git-gud` names the models I run (Sol, Astra, Opus,
 Fable through Pi). Edit it to match yours.
 
 ## Install

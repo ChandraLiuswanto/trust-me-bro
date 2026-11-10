@@ -27,7 +27,7 @@ Paseo tools are exposed through **codemode**, not as direct tools. Call them ins
 
 ## Same-Workspace Pipelines
 
-**Sol-git-gud runs its planner, implementers, reviewers, and fix iterations in the current workspace.** A new role, stage, provider, or parallel task needs an agent, not a new project or workspace.
+**Git-gud runs its planner, implementers, reviewers, and fix iterations in the current workspace.** A new role, stage, provider, or parallel task needs an agent, not a new project or workspace.
 
 - Record one canonical pipeline workspace ID and checkout path. Launch helpers with `create_agent`, omitting `workspaceId` when already in that workspace; a coordinator located elsewhere must pass the recorded `workspaceId` explicitly. Reuse `agentId` for follow-ups. All stages use that same checkout/worktree; never create per-task worktrees or branches.
 - Assign disjoint file ownership to concurrent editors. Serialize overlapping edits and shared Git mutations. Reviewers are read-only.

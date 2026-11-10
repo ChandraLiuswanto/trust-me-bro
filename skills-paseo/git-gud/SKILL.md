@@ -1,9 +1,9 @@
 ---
-name: sol-git-gud-orca
-description: Use when Pi runs inside Orca with SoL-Pi installed and the user hands over a vague or underspecified feature for autonomous, end-to-end delivery, especially long-running work likely to create large observations or context pressure.
+name: git-gud
+description: Use when SoL-Pi is installed and the user hands over a vague or underspecified feature for autonomous, end-to-end delivery, especially long-running work likely to create large observations or context pressure.
 ---
 
-# Sol-Git-Gud (Orca)
+# Git-Gud
 
 Turn a rough idea into verified code with one spec-approval gate, autonomous execution, and bounded independent review. Integration remains the user's decision.
 
@@ -11,15 +11,15 @@ Turn a rough idea into verified code with one spec-approval gate, autonomous exe
 
 Use for underspecified features the user wants delivered whole. For trivial fixes, use systematic-debugging and TDD; for user-led work, use brainstorming. An existing spec/plan permits starting later only when the spec has passed the approval gate below.
 
-## Delegation and Worktree
+## Delegation and Workspace
 
-**REQUIRED SUB-SKILL: `orca-agents`** for every worker and reviewer. It owns launch, model selection, context delivery and completion handling. Delegate only through Orca orchestration workers (`orca orchestration worker-start`). Never use `pi -p`/`pi --mode rpc` subprocesses or generic Pi `Agent`/`SubagentWorkflow`. If Orca orchestration or a required workflow capability is unavailable, report a blocker instead of quietly substituting another tool.
+**REQUIRED SUB-SKILL: `pi-agents`** for every worker and reviewer. It owns general lifecycle, profile discovery, context delivery and completion handling. Delegate through Paseo MCP, never generic Pi `Agent` or `SubagentWorkflow`; if Paseo or required workflow capabilities are unavailable, report a blocker rather than silently substitute tools.
 
-Record one worktree (`ORCA_WORKTREE_ID`) and the absolute checkout path for the pipeline, following the Same-Worktree Pipelines contract in `orca-agents`. Every `terminal create` and `worker-start` passes `--worktree current`. Never use `new-child`/`new-top-level` per stage or bead. This overrides delegated skills' isolation defaults unless the user explicitly requests otherwise. Serialize overlapping edits, shared-output builds and Git mutations; freeze reviewed files during review. Preserve existing work. For legacy multi-worktree runs, report the mismatch and agree on safe consolidation before launching editors; never discard changes to enforce placement.
+Record one workspace ID and absolute checkout path for the pipeline, following `pi-agents`' Same-Workspace Pipelines contract. This overrides delegated skills' isolation defaults unless the user explicitly requests otherwise. Serialize overlapping edits, shared-output builds and Git mutations; freeze reviewed files during review. Preserve existing work. For legacy multi-worktree runs, report the mismatch and agree on safe consolidation before launching editors; never discard changes to enforce placement.
 
 ### Routing
 
-Every delegated agent is a **Pi** worker on a **`fedora/`** model. Start it as an Orca terminal with `--command "pi --model fedora/<model> --thinking <effort>"`, then run `worker-start --terminal <handle>` (see `orca-agents`). `worker-start --agent pi --model …` is refused, and a bare `--agent pi` runs Pi's default model. Pi's `fedora` provider is the 9Router gateway, and every family, Claude included, runs through it. Never use Orca's `claude`/`codex` agents or a bare model ID. The parent may use any provider.
+Every delegated agent uses Paseo provider **`pi`** with a **`fedora/`** model: pass `provider: "pi/fedora/<model>"` (e.g. `pi/fedora/opus`, `pi/fedora/sol`, `pi/fedora/astra`). Pi's `fedora` provider is the 9Router gateway; every family, Claude included, runs through it — never the Claude Code provider or a bare model ID. The parent may use any provider.
 
 The current orchestrator handles brainstorming/spec, implementation planning, coordination and final summary; keep its model and effort unchanged. The table governs delegated work. Sol means **GPT-6.1 Sol**; Astra means **GPT-6 Astra**.
 
@@ -36,7 +36,7 @@ Astra/Fable low is eligible for complex implementation only when the task is wel
 
 Choose one eligible model per assignment based on fit and availability; no family-percentage quota or mandatory Astra/Fable turn. Prefer cross-family review contrast when practical. When task complexity changes, re-evaluate the row and effort; update a suitable owner or hand off with ownership and context recorded. Original ownership never overrides routing eligibility.
 
-Before launching, find the current model IDs with `pi --list-models fedora`; never guess IDs. Thinking levels are `off|minimal|low|medium|high|xhigh|max`. Apply the table's effort through `--thinking`. When a reused agent changes role, update it with `orca terminal send --terminal <H> --text "/thinking <level>" --enter` (or `/model fedora/<m>`) before its next task. Unsupported effort requires a supported alternative; never silently use high, except to match the planner's effort for review, or change parent/global settings.
+Discover current profiles, models, modes and effort IDs before launch; never guess IDs. An otherwise suitable `claude` profile must be re-materialized as `pi/fedora/<model>` with compatible settings, not copied unchanged. Apply the table's effort, overriding profile defaults and updating reused agents when roles change. Unsupported effort requires a supported alternative; never silently use high, except to match the planner's effort for review, or change parent/global settings.
 
 On confirmed Claude usage-limit failure, record it and stop creating or prompting Claude-family agents for the rest of the five-hour window; no quota probes or artificial work. Substitute Sol or Astra only where the task's row permits, at its required effort; otherwise report a blocker. For other route failures, disclose an eligible same-role substitution or report a blocker. Never broaden the matrix to work around availability.
 
@@ -44,11 +44,11 @@ On confirmed Claude usage-limit failure, record it and stop creating or promptin
 
 Reuse suitable idle owners before creating agents: normally one worker per active file lane and one independent reviewer. This overrides fresh-worker-per-task defaults. Original owners fix their findings; reviewers remain read-only and never approve their own implementation. Reuse the plan reviewer for final review when suitable.
 
-Keep a compact roster in plan decisions: terminal handle, last dispatch ID, model, role/effort, worktree, files/beads, reviewer, pending turn, processed completion, spec/plan revision and next action. **One pending work turn per agent.** Queue follow-ups for busy owners; do not interrupt or introduce a competing editor. Independent ready lanes still run concurrently: assign another suitable idle worker or create one for an uncovered lane. If an owner is unavailable or unsuitable, record why and hand off to a suitable non-reviewer without violating file isolation.
+Keep a compact roster in plan decisions: agent ID, role/effort, workspace, files/beads, reviewer, pending turn, processed completion, spec/plan revision and next action. **One pending work turn per agent.** Queue follow-ups for busy owners; do not interrupt or introduce a competing editor. Independent ready lanes still run concurrently: assign another suitable idle worker or create one for an uncovered lane. If an owner is unavailable or unsuitable, record why and hand off to a suitable non-reviewer without violating file isolation.
 
 Bootstrap once with task, ownership, acceptance criteria, spec/plan paths and constraints. Follow-ups carry only changed findings, files, evidence and next action. Run `bd prime` initially, after confirmed context loss, or after a beads error—not on every turn. Each new bead still requires live ownership/dependency checks and an atomic claim; remembered context never authorizes task-state changes.
 
-Accept current assistant conclusions from `worker_done` mail (via `orca orchestration check`) or `worker-read --dispatch <id>`, not tool traces, echoed prompts or stale results. Reject duplicate completions using recorded dispatch ID, task ID and commit evidence. A late result cannot finish a newer turn; reconcile ambiguous identity before dispatching again. Report failed or incomplete results rather than treating silence as success. Missing review verdicts follow the blocker rule below, not an extra review request.
+Accept current assistant conclusions from finish notifications or targeted activity reads, not tool traces, echoed prompts or stale results. Reject duplicate completions using recorded agent/turn and commit evidence. A late result cannot finish a newer turn; reconcile ambiguous identity before dispatching again. Report failed or incomplete results rather than treating silence as success. Missing review verdicts follow the blocker rule below, not an extra review request.
 
 ## Context Recovery
 
@@ -138,11 +138,11 @@ Never use `--deps "blocks:A"`: that direction is reversed; the typed dependency 
 
 Use superpowers:subagent-driven-development for implementation discipline, but override its fresh-agent and per-bead two-stage review defaults: reuse owners and **do not launch per-bead reviewers**. Dispatch independent ready lanes concurrently; blocked chains advance as blockers close. Each worker prompt requires:
 
-- Check live task ownership and dependencies. The actor ID is the worker's terminal handle (`$ORCA_TERMINAL_HANDLE` inside the worker). The coordinator assigns with `bd update "$ID" --assignee "<handle>"`. The worker takes only assigned ready work: `bd ready --assignee "$ORCA_TERMINAL_HANDLE" --json` lists it. Then claim one ID with `bd --actor "$ORCA_TERMINAL_HANDLE" update "$ID" --claim --json`. `ready --claim` cannot be combined with `--assignee`. If nothing is ready, wait; never take another owner's fix or bypass blockers.
+- Check live task ownership and dependencies. Coordinator assigns with `bd update "$ID" --assignee "$AGENT_ID"`; the worker takes only assigned ready work: `bd ready --assignee "$AGENT_ID" --json` lists it. Then claim one ID with `bd --actor "$AGENT_ID" update "$ID" --claim --json`. `ready --claim` cannot be combined with `--assignee`. If nothing is ready, wait; never take another owner's fix or bypass blockers.
 - Follow TDD. Run task tests and commit each bead separately once green. Per-task commits remain the history; never squash them during autopilot.
 - Stage only explicit task paths; never `git add -A` or `git add .` in the shared worktree. Serialize Git mutations. On `index.lock`, wait and retry; never delete it.
 - Never push, pull, fetch or rebase.
-- Message the coordinator mid-turn only for a blocker or a fact another lane needs now (`orca orchestration ask` for a blocker, or `orca orchestration send --type escalation` for a fact another lane needs); never for progress, commit notices or review requests. Everything else goes in the `worker_done` body, which Orca's injected preamble requires.
+- Message the coordinator mid-turn only for a blocker or a fact another lane needs now (`send_agent_prompt` to the `source-agent-id` from your first prompt, `notifyOnFinish: false`); never for progress, commit notices or review requests. Everything else goes in the final message.
 - Close with `bd close "$ID"` only after green task tests and an existing task commit. These are bead exit criteria; no per-bead review is needed.
 
 Recheck `bd ready` until no open beads remain. Tests attached to an edit prove only that command's scope; still perform the prescribed targeted and broad verification. Do not close blocked or failing work merely to reach final review.
@@ -166,14 +166,12 @@ Critical or Important findings force FAIL; Minor findings do not block. A missin
 
 Route valid results mechanically:
 
-- **Initial Critical/Important findings:** create fix beads, link coupled dependencies, and dispatch to original owners with green tests and task commits. Send the **same reviewer one follow-up** as a new `worker-start` on its existing terminal handle, carrying finding/fix deltas and affected invariants; broaden scope for cross-cutting changes.
+- **Initial Critical/Important findings:** create fix beads, link coupled dependencies, and dispatch to original owners with green tests and task commits. Send the **same reviewer one follow-up** on its existing agent ID, carrying finding/fix deltas and affected invariants; broaden scope for cross-cutting changes.
 - **Remaining or new Critical/Important findings after that re-review:** report unresolved blockers and stop for the user. No further autonomous fix/review cycle; integration is not ready.
 - **Minor findings:** one tested, committed batched cleanup bead or report notes. No additional review round for nits.
 - **Clean pass:** proceed to Finish, without another gate.
 
 ## 5. Finish and Wait
-
-Before presenting integration options, close every helper terminal in the roster with `orca terminal close --terminal <H> --json` (workers, reviewers and fix owners). Never close your own `$ORCA_TERMINAL_HANDLE`. Record the closures in plan progress.
 
 Give a concise summary of commits, tests and results, review outcomes/rounds, unresolved findings and blockers. Mention relevant routing substitutions or limitations. No fixed report template is required; do not hide failures behind a success summary.
 

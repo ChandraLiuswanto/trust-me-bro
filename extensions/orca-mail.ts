@@ -87,7 +87,7 @@ async function enrich(s: Started): Promise<Started> {
 			out.title = r?.tasks?.find((t: { id: string }) => t.id === out.taskId)?.title;
 		}
 		if (!out.model && out.terminal) {
-			// Orca does not expose the launch command; orca-agents puts the model in the title.
+			// Orca does not expose the launch command; pi-agents puts the model in the title.
 			const r = await orcaJson(["terminal", "show", "--terminal", out.terminal]);
 			const title: string = r?.terminal?.title ?? "";
 			out.model = /\b(fedora\/[\w.-]+)/.exec(title)?.[1];

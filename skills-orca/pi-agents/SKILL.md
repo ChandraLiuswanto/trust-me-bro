@@ -1,5 +1,5 @@
 ---
-name: orca-agents
+name: pi-agents
 description: Use when Pi runs inside Orca and needs to delegate - a second opinion or advisor take from another model, handing off the current task, a committee for a hard or stuck problem, parallel independent agent tasks, or continuing prior delegated work.
 ---
 

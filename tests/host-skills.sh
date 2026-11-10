@@ -4,8 +4,9 @@
 #   --assert  exit non-zero unless host isolation holds.
 set -u
 ASSERT=${1:-}
-PASEO_ONLY=(skill:pi-agents skill:sol-git-gud skill:paseo)
-ORCA_ONLY=(skill:orca-agents skill:sol-git-gud-orca skill:orca-cli skill:orca-computer-use)
+# Host skills share names (git-gud, pi-agents), so tag them with their host dir.
+PASEO_ONLY=(paseo/pi-agents paseo/git-gud skill:paseo)
+ORCA_ONLY=(orca/pi-agents orca/git-gud skill:orca-cli skill:orca-computer-use)
 NEVER=(skill:orchestration)
 SHARED=(skill:web-scraping skill:writing-like-a-human)
 fail=0
@@ -16,12 +17,18 @@ skills_for() { # $1 = label, rest = env assignments
     env -u PASEO_AGENT_ID -u PASEO_HOME -u ORCA_PANE_KEY -u ORCA_AGENT_SESSION_ID -u ORCA_CLI_BIN_DIR -u PI_HOST_SKILLS "$@" \
       timeout 30 pi --mode rpc --no-session 2>"/tmp/host-skills-$label.err" |
     python3 -c '
-import sys, json
+import sys, json, re
 for line in sys.stdin:
     try: d = json.loads(line)
     except ValueError: continue
     if d.get("command") == "get_commands":
-        names = sorted(c["name"] for c in d["data"]["commands"] if c["source"] == "skill")
+        names = []
+        for c in d["data"]["commands"]:
+            if c["source"] != "skill": continue
+            path = c.get("sourceInfo", {}).get("path", "")
+            m = re.search(r"/skills-(paseo|orca)/([^/]+)/SKILL\.md$", path)
+            names.append(f"{m[1]}/{m[2]}" if m else c["name"])
+        names.sort()
         print(" ".join(names)); break
 '
 }
@@ -31,6 +38,8 @@ expect_set() {
   local label=$1 want=$2 seen=$3 total=$4 name=$5
   if [[ $want == yes && $seen -ne $total ]]; then fail=1; echo "  !! expected all $name skills"; fi
   if [[ $want == no && $seen -ne 0 ]]; then fail=1; echo "  !! $name skills leaked"; fi
+  # shadowed: same-named host skills lost to the other host; only uniquely named ones load.
+  if [[ $want == shadowed && $seen -ne $((total - 2)) ]]; then fail=1; echo "  !! expected only uniquely named $name skills"; fi
 }
 
 check() { # $1 label, $2 expect paseo (yes/no), $3 expect orca (yes/no), rest env
@@ -53,7 +62,7 @@ check paseo    yes no  PASEO_AGENT_ID=test
 check orca     no  yes ORCA_PANE_KEY=test
 check orcachat no  yes ORCA_AGENT_SESSION_ID=test ORCA_CLI_BIN_DIR=/tmp
 check override yes no  PI_HOST_SKILLS=paseo
-check both     yes yes PI_HOST_SKILLS=paseo,orca
+check both     yes shadowed PI_HOST_SKILLS=paseo,orca  # names collide; paseo loads first
 check none     no  no  PASEO_AGENT_ID=test ORCA_PANE_KEY=test PI_HOST_SKILLS=none
 
 [[ $ASSERT == --assert ]] && { ((fail)) && echo FAIL || echo PASS; exit $fail; }
