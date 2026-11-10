@@ -27,11 +27,11 @@ Paseo tools are exposed through **codemode**, not as direct tools. Call them ins
 
 ## Same-Workspace Pipelines
 
-**Git-gud runs its planner, implementers, reviewers, and fix iterations in the current workspace.** A new role, stage, provider, or parallel task needs an agent, not a new project or workspace.
+**Git-gud runs its planner, implementers, reviewers, and fix iterations in one workspace** — the current one, or the pipeline worktree git-gud creates off the default branch. A new role, stage, provider, or parallel task needs an agent, not a new project or workspace.
 
 - Record one canonical pipeline workspace ID and checkout path. Launch helpers with `create_agent`, omitting `workspaceId` when already in that workspace; a coordinator located elsewhere must pass the recorded `workspaceId` explicitly. Reuse `agentId` for follow-ups. All stages use that same checkout/worktree; never create per-task worktrees or branches.
 - Assign disjoint file ownership to concurrent editors. Serialize overlapping edits and shared Git mutations. Reviewers are read-only.
-- If collision risk appears, coordinate or serialize in this workspace. Do not automatically create workspaces/worktrees to preserve parallelism, even under deadline pressure.
+- If collision risk appears, coordinate or serialize in this workspace. Do not automatically create workspaces/worktrees to preserve parallelism, even under deadline pressure. The single pipeline worktree that git-gud creates off the default branch is the canonical workspace, not per-task isolation.
 - If the user explicitly requests isolated branches/checkouts or another workspace, use that placement. For new isolation, call `create_workspace(isolation: "worktree", path: <source checkout>, projectId: <known existing project>)`, then pass its returned `workspaceId` to `create_agent`. Omit unknown optional IDs; never substitute a project ID for a workspace ID.
 - A second `local` workspace pointing at the same directory does not isolate files. A Git-worktree workflow instruction alone is not a request for a separate Paseo workspace per pipeline stage.
 

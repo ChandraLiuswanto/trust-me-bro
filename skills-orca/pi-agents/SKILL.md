@@ -50,7 +50,7 @@ A Pi chat runs Pi's default model (`--model` is refused), has no Dispatch, never
 - **One pending task per terminal.** Queue follow-ups for a busy worker.
 - **Retune a reused worker** while it is idle, before the next follow-up: `orca terminal send --terminal <H> --text "/thinking medium" --enter` or `--text "/model fedora/sol" --enter`.
 - **Cleanup:** terminals you created stay open after `worker_done` (`retained`/`external_terminal`). Close finished helpers with `orca terminal close --terminal <H> --json`, but keep ongoing advisors. Never close your own terminal or remove the worktree.
-- **Same worktree:** run stages, reviewers and parallel editors with `--worktree current`. Give concurrent editors disjoint files, serialize overlapping edits and Git mutations, and keep reviewers read-only. Use `new-child` only when the user asks for isolation, and release those workers when done.
+- **Same worktree:** run stages, reviewers and parallel editors in one worktree: `--worktree current`, or `--worktree path:<abs>` for the pipeline worktree git-gud recorded. Give concurrent editors disjoint files, serialize overlapping edits and Git mutations, and keep reviewers read-only. Use `new-child` only when the user asks for isolation, and release those workers when done.
 - **Results:** synthesize and recommend. Never paste raw worker output.
 
 ## Delegation Choices

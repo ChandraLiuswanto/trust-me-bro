@@ -15,7 +15,21 @@ Use for underspecified features the user wants delivered whole. For trivial fixe
 
 **REQUIRED SUB-SKILL: `pi-agents`** for every worker and reviewer. It owns launch, model selection, context delivery and completion handling. Delegate only through Orca orchestration workers (`orca orchestration worker-start`). Never use `pi -p`/`pi --mode rpc` subprocesses or generic Pi `Agent`/`SubagentWorkflow`. If Orca orchestration or a required workflow capability is unavailable, report a blocker instead of quietly substituting another tool.
 
-Record one worktree (`ORCA_WORKTREE_ID`) and the absolute checkout path for the pipeline, following the Same-Worktree Pipelines contract in `pi-agents`. Every `terminal create` and `worker-start` passes `--worktree current`. Never use `new-child`/`new-top-level` per stage or bead. This overrides delegated skills' isolation defaults unless the user explicitly requests otherwise. Serialize overlapping edits, shared-output builds and Git mutations; freeze reviewed files during review. Preserve existing work. For legacy multi-worktree runs, report the mismatch and agree on safe consolidation before launching editors; never discard changes to enforce placement.
+Record the pipeline worktree (see Pipeline Worktree below) by its ID and absolute checkout path, following the Same-Worktree Pipelines contract in `pi-agents`. Every `terminal create` and `worker-start` passes `--worktree path:<pipeline path>`. Never use `new-child`/`new-top-level` per stage or bead. This overrides delegated skills' isolation defaults unless the user explicitly requests otherwise. Serialize overlapping edits, shared-output builds and Git mutations; freeze reviewed files during review. Preserve existing work. For legacy multi-worktree runs, report the mismatch and agree on safe consolidation before launching editors; never discard changes to enforce placement.
+
+### Pipeline Worktree
+
+The pipeline never runs in a checkout on the default branch (`main`, `master`, or the target of `origin/HEAD`). Before writing the spec file, run `git branch --show-current` and pick exactly one row:
+
+| Current checkout | Pipeline worktree |
+|---|---|
+| Default branch, change not simple | Create one: `orca worktree create --name <topic> --branch gg/<topic> --base-branch <default> --json`. Record its worktree ID and absolute path. |
+| Non-default branch | The current worktree. |
+| Default branch, change simple | The current checkout. Record `simple: <reason>` in plan decisions. |
+
+**Simple** means all of the following: one task, at most two files, no schema/migration/route/public-contract change, and no parallel workers. Anything else counts as not simple.
+
+Running `git switch -c` inside the default-branch checkout does not meet this rule, because the user's checkout must stay on its branch. Write the spec, plan, beads and every commit inside the pipeline worktree, and run your own commands there (`git -C <path>`, `cd <path> &&`). If pipeline docs were already written in the default checkout, move them into the worktree before continuing. Create the worktree once per pipeline, never per stage or bead.
 
 ### Routing
 

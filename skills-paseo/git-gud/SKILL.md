@@ -15,7 +15,21 @@ Use for underspecified features the user wants delivered whole. For trivial fixe
 
 **REQUIRED SUB-SKILL: `pi-agents`** for every worker and reviewer. It owns general lifecycle, profile discovery, context delivery and completion handling. Delegate through Paseo MCP, never generic Pi `Agent` or `SubagentWorkflow`; if Paseo or required workflow capabilities are unavailable, report a blocker rather than silently substitute tools.
 
-Record one workspace ID and absolute checkout path for the pipeline, following `pi-agents`' Same-Workspace Pipelines contract. This overrides delegated skills' isolation defaults unless the user explicitly requests otherwise. Serialize overlapping edits, shared-output builds and Git mutations; freeze reviewed files during review. Preserve existing work. For legacy multi-worktree runs, report the mismatch and agree on safe consolidation before launching editors; never discard changes to enforce placement.
+Record the pipeline workspace (see Pipeline Worktree below) by its ID and absolute checkout path, following `pi-agents`' Same-Workspace Pipelines contract, and pass that `workspaceId` to every `create_agent`. This overrides delegated skills' isolation defaults unless the user explicitly requests otherwise. Serialize overlapping edits, shared-output builds and Git mutations; freeze reviewed files during review. Preserve existing work. For legacy multi-worktree runs, report the mismatch and agree on safe consolidation before launching editors; never discard changes to enforce placement.
+
+### Pipeline Worktree
+
+The pipeline never runs in a checkout on the default branch (`main`, `master`, or the target of `origin/HEAD`). Before writing the spec file, run `git branch --show-current` and pick exactly one row:
+
+| Current checkout | Pipeline worktree |
+|---|---|
+| Default branch, change not simple | Create one: `create_workspace(isolation: "worktree", mode: "branch-off", branchName: "gg/<topic>", baseBranch: "<default>", path: <source checkout>, projectId: <known project>)`. Record the returned `workspaceId` and its absolute path. |
+| Non-default branch | The current workspace. |
+| Default branch, change simple | The current checkout. Record `simple: <reason>` in plan decisions. |
+
+**Simple** means all of the following: one task, at most two files, no schema/migration/route/public-contract change, and no parallel workers. Anything else counts as not simple.
+
+Running `git switch -c` inside the default-branch checkout does not meet this rule, because the user's checkout must stay on its branch. Write the spec, plan, beads and every commit inside the pipeline worktree, and run your own commands there (`git -C <path>`, `cd <path> &&`). If pipeline docs were already written in the default checkout, move them into the worktree before continuing. Create the worktree once per pipeline, never per stage or bead.
 
 ### Routing
 
