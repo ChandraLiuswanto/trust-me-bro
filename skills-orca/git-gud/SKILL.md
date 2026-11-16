@@ -89,6 +89,8 @@ Then initialize the complete active `update_plan`; keep one step in progress and
 
 Before presenting integration options, close every helper terminal in the roster with `orca terminal close --terminal <H> --json` (workers, reviewers and fix owners). Never close your own `$ORCA_TERMINAL_HANDLE`. Record the closures in plan progress.
 
+**Cleanup after integration** (when the user asks): close only finished beads, by explicit ID; leave open or blocked ones open. Remove the pipeline worktree and its merged local branch together with `orca worktree rm --worktree path:<P> --delete-branch --json` (from outside P). If the result shows the branch kept, try `git -C <source checkout> branch -d gg/<topic>`; `-d` refuses unmerged work, so if it refuses too, keep the branch and tell the user. Never force-delete with `git branch -D`. A remote branch is deleted only on the user's explicit request.
+
 Give a concise summary of commits, tests and results, review outcomes/rounds, unresolved findings and blockers. Mention relevant routing substitutions or limitations. No fixed report template is required; do not hide failures behind a success summary.
 
 **REQUIRED SUB-SKILL: superpowers:finishing-a-development-branch.** Verify tests, detect the environment and confirm the base branch. Present its integration options (merge locally / push + PR / keep as-is), then **STOP and wait for the user's choice**. Execute only the chosen option; push requires the user's explicit command. Spec approval and “no further gates” authorize implementation, not merging, touching the base branch or choosing integration for the user.

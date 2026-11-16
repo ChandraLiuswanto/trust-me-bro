@@ -89,7 +89,7 @@ Then initialize the complete active `update_plan`; keep one step in progress and
 
 Before presenting integration options, archive every helper agent in the roster with `archive_agent` (workers, reviewers and fix owners). Never archive your own agent, and never use `archive_workspace` on the user's workspace to clean up. Record the closures in plan progress.
 
-**Cleanup after integration** (when the user asks): close only finished beads, by explicit ID; leave open or blocked ones open. Archive only the pipeline workspace. Never delete the `gg/<topic>` branch, even when merged, unless the user confirms branch deletion separately; a general "clean up everything" is not that confirmation.
+**Cleanup after integration** (when the user asks): close only finished beads, by explicit ID; leave open or blocked ones open. Archive the helper agents and the pipeline workspace (`archive_workspace`), never your own agent or the user's workspace. Then delete the merged local `gg/<topic>` branch with `git -C <source checkout> branch -d gg/<topic>` (and `git worktree prune` if the worktree entry remains). `-d` refuses unmerged work: if it refuses, keep the branch and tell the user; never use `-D`. A remote branch is deleted only on the user's explicit request.
 
 Give a concise summary of commits, tests and results, review outcomes/rounds, unresolved findings and blockers. Mention relevant routing substitutions or limitations. No fixed report template is required; do not hide failures behind a success summary.
 

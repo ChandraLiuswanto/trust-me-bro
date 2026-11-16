@@ -155,3 +155,14 @@ Harness: `python3 tests/git-gud/run.py <arm> <dir> --host=paseo` with `scenarios
 The control's biggest gaps: no stop-and-confirm rule for replacing a worker (H5-ordered 0/8), no first-nudge rule (T3 0/8), and the done-check / init / Minor caps (H3-done 1/8, S6 2/8). The Orca v2 rules carried over these.
 Remaining split misses (all Astra): S8 bootstrap-only prompts, T1 spec-commit stated in prose rather than as a command, one each in H4 and H5-ordered.
 The first split run scored 0/3 Astra on H7 (it deleted the merged branch on "clean up everything"); an explicit cleanup paragraph in Finish fixed it (8/8).
+
+## Cleanup deletes the merged local branch (2026-11-16)
+
+User preference: cleanup should not leave merged `gg/<topic>` branches behind. Rubrics changed: H7 (after merge) now requires removing the worktree and safe-deleting the merged local branch; S7 ("keep as-is", unmerged) still requires keeping it.
+
+| Arm | S7 + H7 |
+|---|---|
+| Orca control (HEAD) | 8/16 (H7 0/8: kept the branch) |
+| Orca new rule | 16/16 (first draft 15/16: one Opus kept a branch Orca refused to delete; added the `git branch -d` fallback) |
+| Paseo control (HEAD) | 8/16 |
+| Paseo new rule | 16/16 |
