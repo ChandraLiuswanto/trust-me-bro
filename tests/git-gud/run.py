@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pressure-scenario runner for skills-orca/git-gud.
 
-usage: python3 tests/git-gud/run.py <arm-name> <skill-dir> [--reps opus=5,astra=3] [--only ID,ID]
+usage: python3 tests/git-gud/run.py <arm-name> <skill-dir> [--reps=opus=5,astra=3] [--only=ID,ID] [--host=orca|paseo]
 
 System prompt = <skill-dir>/SKILL.md + pi-agents + brainstorming, as a loaded skill.
 The model gets a `read` tool that serves files from <skill-dir> (and the two sibling skills).
@@ -15,11 +15,17 @@ import concurrent.futures as cf, json, os, pathlib, re, sys, time, urllib.reques
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from scenarios import HEADER, S, SHAPE_CHOICE, SHAPE_OPEN, STAGE_GOALS  # noqa: E402
+HOSTSEL = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--host=")), "orca")
+if HOSTSEL == "paseo":
+    from scenarios_paseo import HEADER, S, SHAPE_CHOICE, SHAPE_OPEN, STAGE_GOALS  # noqa: E402
+else:
+    from scenarios import HEADER, S, SHAPE_CHOICE, SHAPE_OPEN, STAGE_GOALS  # noqa: E402
 
 HOME = pathlib.Path.home()
 CFG = json.load(open(HOME / ".pi/agent/models.json"))["providers"]["fedora"]
-PI_AGENTS = HOME / "trust-me-bro/skills-orca/pi-agents/SKILL.md"
+PI_AGENTS = HOME / f"trust-me-bro/skills-{HOSTSEL}/pi-agents/SKILL.md"
+PASEO_REF = HOME / ".agents/skills/paseo/SKILL.md"
+HOSTNAME = "Paseo" if HOSTSEL == "paseo" else "Orca"
 BRAINSTORM = HOME / ".pi/agent/git/github.com/obra/superpowers/skills/brainstorming/SKILL.md"
 VIRT = "/skills/git-gud"  # path the model sees for the skill under test
 TOOLS = [{"type": "function", "function": {
@@ -53,7 +59,7 @@ def build_system(skill_dir):
     parts = [("git-gud", f"{VIRT}/SKILL.md", strip_fm((skill_dir / "SKILL.md").read_text()) + listing),
              ("pi-agents", "/skills/pi-agents/SKILL.md", strip_fm(PI_AGENTS.read_text())),
              ("brainstorming", "/skills/brainstorming/SKILL.md", strip_fm(BRAINSTORM.read_text()))]
-    return ("You are Pi, a coding agent running inside Orca. You have loaded these skills and follow them. "
+    return (f"You are Pi, a coding agent running inside {HOSTNAME}. You have loaded these skills and follow them. "
             "Relative file references in a skill resolve against that skill's directory.\n\n" +
             "\n\n".join(f'<skill name="{n}" location="{loc}">\n{body}\n</skill>' for n, loc, body in parts))
 
@@ -64,6 +70,8 @@ def serve(path, skill_dir):
         return strip_fm(PI_AGENTS.read_text())
     if "brainstorming" in path and name == "SKILL.md":
         return strip_fm(BRAINSTORM.read_text())
+    if "paseo" in path and name == "SKILL.md" and "git-gud" not in path:
+        return strip_fm(PASEO_REF.read_text())
     f = skill_dir / name
     if f.is_file():
         return f.read_text()

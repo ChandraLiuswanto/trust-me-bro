@@ -142,3 +142,16 @@ Harness: `tests/git-gud/` (`run.py` and 25 scenarios from `scenarios.py`). Every
   - Control: S8 Astra 1 refusal, T4 Astra 2 read-only answers.
   - v2: H5-ordered, T1, T2, each one Astra miss.
 - **Loading:** the expected file was read in 8/8 runs for every scenario that has one, except the finish stage (S7/H7, 0/8). Those two passed anyway, because the core keeps the cleanup rules. H4-resume read `workers.md` in 5/8 runs, but SKILL.md already holds the resume list.
+
+## Paseo host: split mirrored from Orca (2026-11-16)
+
+Harness: `python3 tests/git-gud/run.py <arm> <dir> --host=paseo` with `scenarios_paseo.py` (the same 25 ids, in Paseo MCP terms). 5 Opus + 3 Astra per scenario.
+
+| Arm | Total |
+|---|---|
+| Control (single-file `skills-paseo/git-gud/SKILL.md` at `064d888`) | 137/200 |
+| Paseo split (Orca split + Paseo mechanics + explicit cleanup rule) | 194/200 |
+
+The control's biggest gaps: no stop-and-confirm rule for replacing a worker (H5-ordered 0/8), no first-nudge rule (T3 0/8), and the done-check / init / Minor caps (H3-done 1/8, S6 2/8). The Orca v2 rules carried over these.
+Remaining split misses (all Astra): S8 bootstrap-only prompts, T1 spec-commit stated in prose rather than as a command, one each in H4 and H5-ordered.
+The first split run scored 0/3 Astra on H7 (it deleted the merged branch on "clean up everything"); an explicit cleanup paragraph in Finish fixed it (8/8).
