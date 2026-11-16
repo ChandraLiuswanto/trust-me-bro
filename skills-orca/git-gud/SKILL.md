@@ -19,7 +19,7 @@ Record the pipeline worktree (see Pipeline Worktree below) by its ID and absolut
 
 ### Pipeline Worktree
 
-The pipeline never runs in a checkout on the default branch (`main`, `master`, or the target of `origin/HEAD`). Before writing the spec file, run `git branch --show-current` and pick exactly one row:
+The pipeline never runs in a checkout on the default branch (`main`, `master`, or the target of `origin/HEAD`). Only after the spec gate opens (section 1), run `git branch --show-current` and pick exactly one row, judging "simple" from the approved spec:
 
 | Current checkout | Pipeline worktree |
 |---|---|
@@ -29,7 +29,7 @@ The pipeline never runs in a checkout on the default branch (`main`, `master`, o
 
 **Simple** means all of the following: one task, at most two files, no schema/migration/route/public-contract change, and no parallel workers. Anything else counts as not simple.
 
-Running `git switch -c` inside the default-branch checkout does not meet this rule, because the user's checkout must stay on its branch. Write the spec, plan, beads and every commit inside the pipeline worktree, and run your own commands there (`git -C <path>`, `cd <path> &&`). If pipeline docs were already written in the default checkout, move them into the worktree before continuing. Create the worktree once per pipeline, never per stage or bead.
+Running `git switch -c` inside the default-branch checkout does not meet this rule, because the user's checkout must stay on its branch. Write the spec, plan, beads and every commit inside the pipeline worktree, and run your own commands there (`git -C <path>`, `cd <path> &&`). Create the worktree once per pipeline, never per stage or bead.
 
 ### Routing
 
@@ -50,6 +50,8 @@ Astra/Fable low is eligible for complex implementation only when the task is wel
 
 Choose one eligible model per assignment based on fit and availability; no family-percentage quota or mandatory Astra/Fable turn. Prefer cross-family review contrast when practical. When task complexity changes, re-evaluate the row and effort; update a suitable owner or hand off with ownership and context recorded. Original ownership never overrides routing eligibility.
 
+Launch exactly as `pi-agents` shows (terminal create → `terminal wait --for tui-idle` → `worker-start --terminal`), with these pipeline specifics: the parsed handle must be non-empty and start with `term_`, or nothing is dispatched; spec files go in `<P>/.scratch/specs/<role>-<bead>.md`; if `worker-start` exits non-zero, do not rerun it: read `failedStage` from its JSON and follow the orchestration recovery reference.
+
 Before launching, find the current model IDs with `pi --list-models fedora`; never guess IDs. Thinking levels are `off|minimal|low|medium|high|xhigh|max`. Apply the table's effort through `--thinking`. When a reused agent changes role, update it with `orca terminal send --terminal <H> --text "/thinking <level>" --enter` (or `/model fedora/<m>`) before its next task. Unsupported effort requires a supported alternative; never silently use high, except to match the planner's effort for review, or change parent/global settings.
 
 On confirmed Claude usage-limit failure, record it and stop creating or prompting Claude-family agents for the rest of the five-hour window; no quota probes or artificial work. Substitute Sol or Astra only where the task's row permits, at its required effort; otherwise report a blocker. For other route failures, disclose an eligible same-role substitution or report a blocker. Never broaden the matrix to work around availability.
@@ -64,18 +66,52 @@ Bootstrap once with task, ownership, acceptance criteria, spec/plan paths and co
 
 Accept current assistant conclusions from `worker_done` mail (via `orca orchestration check`) or `worker-read --dispatch <id>`, not tool traces, echoed prompts or stale results. Reject duplicate completions using recorded dispatch ID, task ID and commit evidence. A late result cannot finish a newer turn; reconcile ambiguous identity before dispatching again. Report failed or incomplete results rather than treating silence as success. Missing review verdicts follow the blocker rule below, not an extra review request.
 
+### Replacing a Worker
+
+**No replacement editor while the old dispatch might still write.** A missing terminal, a "running" status with no output, a stale screen or a user saying "just give it to someone else" proves nothing about whether it stopped. Before any new worker touches that bead or its files:
+
+1. `orca orchestration worker-stop --dispatch <id> --json`, then `worker-show --dispatch <id> --json`. Continue only when it shows the dispatch stopped or failed. Anything else (`stop_unknown`, still running, an error) is a blocker for the user.
+2. `git -C <P> status --short`: commit or keep that lane's work; never discard it.
+3. Retry with `worker-start --task <task_id> --retry-of <id>` (repeat `--worktree`/`--terminal`; `--retry-of` does not inherit placement). Record the old and new dispatch IDs in the roster.
+
+**Only Orca escalations carrying a stopReason start this ladder.** Silence, elapsed time, an unchanged screen, "no progress after the nudge" or an impatient user never do: inspect with `worker-show`/`worker-read`, tell the user what you see, end the turn and let Orca wake you. Never poll (`check --wait` loops, sleep loops). If the user explicitly orders a silent worker stopped, that order is the trigger; record it.
+
+First stopReason escalation from a worker: `worker-show`, then ONE nudge with `send --to dispatch:<id>`. A second new stopReason on the same dispatch runs the three steps above. A third stopReason, a failed retry or Orca's retry breaker goes to the user; never start a third worker. Reviewers get one nudge only and are never replaced.
+
+| Excuse | Reality |
+|---|---|
+| "Its terminal is gone, so it's dead" | Orca still records it as running. Stop and confirm first. |
+| "Close it out with whatever verb `--help` lists, then hand off" | The verb is `worker-stop`, and the handoff waits for its confirmation. |
+| "Three lanes are blocked waiting on it" | Blocked lanes are cheaper than two editors in one worktree. |
+| "It made no progress after the nudge, so stop it" | Silence is not a stopReason. Wait for Orca's escalation or the user's explicit order. |
+
 ## Context Recovery
 
 - Retrieve needed packed-output pages with `obs_recall` instead of rerunning commands to recover omitted output.
 - After compaction, restore ownership, pending turns, processed completions and verification state from the plan, roster and repository evidence. Resume the existing work rather than restart; verify side effects before retrying.
+- After an Orca restart or a fresh coordinator, read before acting: `git -C <P> status` and `git -C <P> log main..HEAD`, `orca orchestration run-use --id <run>`, `worker-list --run <run>`, `worker-show`/`worker-read --dispatch <id>` per roster entry, `inbox --terminal run:<run> --limit 50 --full`, and the bead done-check from section 3. Retry only dispatches proven stopped or failed (see Replacing a Worker).
 
 ## 1. Spec and Approval
 
-**REQUIRED SUB-SKILL: superpowers:brainstorming.** Follow its checklist through refinement and self-review. Write requirements, success criteria and edge cases to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`. The later implementation plan is a separate file. Brainstorming supplies the spec review; do not add independent spec-hardening reviewers.
+**REQUIRED SUB-SKILL: superpowers:brainstorming.** Follow its checklist through refinement and self-review, with requirements, success criteria and edge cases. Brainstorming supplies the spec review; do not add independent spec-hardening reviewers.
 
-Its request to review the written spec is the single approval ask. The gate opens only when the **entire trimmed reply** to the presented spec is **`no cap`**, **`autopilot`**, or **`lgtm`**, case-insensitively. Mixed text such as “lgtm but rename X” or “not lgtm” is feedback: address it and re-present. “Looks good”, “approved”, or “go ahead” requires asking for a keyword. A keyword in the initial request pre-approves nothing.
+**Nothing is created before approval.** Show the full spec in chat and ask for approval there. Until the gate opens, the only state you change is `update_plan`: no files (not even `.scratch`), no git-exclude edits, no commits, branches, worktrees, beads, terminals or workers. This overrides brainstorming's "write the spec to `docs/superpowers/specs/` and commit it" step and the Pipeline Worktree ordering: the spec file is written only after approval.
 
-After approval, initialize the complete active `update_plan`; keep one step in progress and record concise evidence at phase/bead boundaries. Run without plan approval, breakdown confirmation or progress check-ins. Stop only for an unresolvable blocker, genuine spec ambiguity, unavailable required capabilities, or the review blockers below. This autonomy does **not** authorize integration.
+| Excuse | Reality |
+|---|---|
+| "Brainstorming requires a committed spec for the user to review" | Here the user reviews the spec in chat. The file comes after approval. |
+| "Writing the spec in a worktree is not building" | A worktree, branch or commit before approval is work done ahead of the gate. |
+| "The user said get everything ready while they're away" | Ready means the spec in chat. The gate opens only on the approval reply. |
+
+**The gate** opens only when the **entire trimmed reply** to the latest presented spec is exactly **`lgtm`** or **`LGTM`**. Anything else is feedback: other spellings (“Lgtm”), “approved”, “looks good”, “no cap”, “not lgtm”, “lgtm but rename X”, “Lgtm, ship it”. Address it, re-present the spec, and say that a reply of exactly `lgtm` starts the run. A keyword in the initial request pre-approves nothing.
+
+**After approval**, in order:
+
+1. Pick the pipeline worktree (Pipeline Worktree above).
+2. Write the spec to `<P>/docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit it there. The implementation plan is a separate later file.
+3. Show the remaining stages once and say: “No further human approval gates before integration; blockers still stop execution.”
+
+Then initialize the complete active `update_plan`; keep one step in progress and record concise evidence at phase/bead boundaries. Run without plan approval, breakdown confirmation or progress check-ins. Stop only for an unresolvable blocker, genuine spec ambiguity, unavailable required capabilities, or the review blockers below. This autonomy does **not** authorize integration.
 
 ## 2. Plan and One Review
 
@@ -139,14 +175,21 @@ Exactly one reviewer and one round. Fix **Issues** inline before creating beads,
 
 ## 3. Beads and Parallel Implementation
 
-Inside the recorded checkout:
+Inside the recorded checkout (run every bd call as `cd <P> && bd …`; `bd -C` fails before a database exists):
 
 ```bash
-bd init --stealth --non-interactive
-A=$(bd create "Task A" --silent)
-B=$(bd create "Task B" --silent)
+cd <P>
+out=$(bd where 2>&1); rc=$?
+# rc=0: reuse the database. Never re-init: a second init prints "Aborting." and exits 0.
+# Output contains "No active beads workspace found": bd init --stealth --non-interactive
+# Anything else (connection refused, permission, …): blocker. Report it; do not init.
+L="gg:<topic>-$(date +%Y%m%d%H%M)-$(openssl rand -hex 2)"   # this run's label; record it in plan decisions
+A=$(bd create "Task A" -l "$L" --silent)
+B=$(bd create "Task B" -l "$L" --silent)
 bd dep "$A" --blocks "$B"  # B waits for A
 ```
+
+Every bead this run creates (tasks, fixes, cleanup) carries `-l "$L"`. Write the literal label into worker specs; workers do not have `$L`. The database may already hold beads from earlier runs; filter by `$L`, never by topic alone. In a worktree, the database lives in the main checkout's `.beads/`, so removing the worktree does not delete beads.
 
 Never use `--deps "blocks:A"`: that direction is reversed; the typed dependency is `blocked-by:A`. Build dependencies from the reviewed ownership map. Disjoint-file tasks remain unblocked; shared-file writers chain. Uncertainty about a specific pair may justify one dependency, not serializing the whole graph. If the first `bd ready` yields one bead despite several independent new-file tasks, fix over-serialization before dispatch.
 
@@ -159,7 +202,7 @@ Use superpowers:subagent-driven-development for implementation discipline, but o
 - Message the coordinator mid-turn only for a blocker or a fact another lane needs now (`orca orchestration ask` for a blocker, or `orca orchestration send --type escalation` for a fact another lane needs); never for progress, commit notices or review requests. Everything else goes in the `worker_done` body, which Orca's injected preamble requires.
 - Close with `bd close "$ID"` only after green task tests and an existing task commit. These are bead exit criteria; no per-bead review is needed.
 
-Recheck `bd ready` until no open beads remain. Tests attached to an edit prove only that command's scope; still perform the prescribed targeted and broad verification. Do not close blocked or failing work merely to reach final review.
+**Done-check** before final review: `cd <P> && bd list -l "$L" --all -n 0 --json`. The run is done only when every bead in it is `closed`. An open, in_progress, blocked or deferred bead means it is not done. An empty `bd ready` never means done: it hides in_progress and blocked beads, and a plain `bd list` hides closed beads and stops at 50 rows. Tests attached to an edit prove only that command's scope; still perform the prescribed targeted and broad verification. Do not close blocked or failing work merely to reach final review.
 
 ## 4. Bounded Final Review
 
@@ -182,7 +225,7 @@ Route valid results mechanically:
 
 - **Initial Critical/Important findings:** create fix beads, link coupled dependencies, and dispatch to original owners with green tests and task commits. Send the **same reviewer one follow-up** as a new `worker-start` on its existing terminal handle, carrying finding/fix deltas and affected invariants; broaden scope for cross-cutting changes.
 - **Remaining or new Critical/Important findings after that re-review:** report unresolved blockers and stop for the user. No further autonomous fix/review cycle; integration is not ready.
-- **Minor findings:** one tested, committed batched cleanup bead or report notes. No additional review round for nits.
+- **Minor findings:** these fixes land after the last review, so they are capped. Fix at most **3** Minor findings, each **≤20 changed lines** and **≤60 lines in total** (insertions + deletions from `git diff --numstat`). Each fix gets its own commit with the full suite passing. List them in the summary under **Unreviewed changes** (finding → commit, “not independently reviewed”). Every other Minor finding becomes a report note. No splitting a fix to fit the cap, and no additional review round for nits. Critical/Important findings never go here.
 - **Clean pass:** proceed to Finish, without another gate.
 
 ## 5. Finish and Wait
