@@ -125,3 +125,20 @@ Facts checked live before writing (they changed the committee wording):
 **REFACTOR loop (1 iteration):** the first GREEN run caused a regression. In H5-silent, 3/5 opus runs planned `worker-stop` on a worker that was only silent ("if the nudge gets nothing back … worker-stop"). I added "Only Orca escalations carrying a stopReason start this ladder; silence … never do; an explicit user order is a trigger" plus an excuse row. Re-run: H5-silent 0/8 stop or replace; the `check --wait` mentions are all "no `check --wait`". New control H5-ordered (user explicitly orders the stop): 8/8 stop → confirm → `--retry-of`, so the fix did not over-correct.
 
 Remaining: the S9 rereview still follows line 183 (as intended until E9 is verified). Astra still refuses S8 without tools.
+
+## Split into stage files (control vs candidate)
+
+Harness: `tests/git-gud/` (`run.py` and 25 scenarios from `scenarios.py`). Every call gets a `read` tool that serves the skill's files, and an Opus judge scores each answer against its rubric. Every FAIL was read by hand. Runs: 5 Opus + 3 Astra per scenario, 200 runs per arm.
+
+| Arm | SKILL.md words | Total |
+|---|---|---|
+| Control: single file (2e33cf6) | 3,521 | 197/200 |
+| Split v1 | 1,379 + 5 files | 193/200 |
+| Split v2 (applied) | 1,436 + 5 files | 197/200 |
+
+- **Split v1 regression:** S9-rereview went 0/3 on Astra. Astra treated a sub-file as weaker than pi-agents ("pi-agents… governs reuse despite final-review.md's conflicting worker-start wording"). T2-plan-review also went 1/3, with discovery-only answers.
+- **v2 fix:** one paragraph saying the split files carry the skill's full authority and win over sub-skill defaults, and that agents should write real commands instead of `--help`. S9 returned to 3/3.
+- **Remaining failures:**
+  - Control: S8 Astra 1 refusal, T4 Astra 2 read-only answers.
+  - v2: H5-ordered, T1, T2, each one Astra miss.
+- **Loading:** the expected file was read in 8/8 runs for every scenario that has one, except the finish stage (S7/H7, 0/8). Those two passed anyway, because the core keeps the cleanup rules. H4-resume read `workers.md` in 5/8 runs, but SKILL.md already holds the resume list.
