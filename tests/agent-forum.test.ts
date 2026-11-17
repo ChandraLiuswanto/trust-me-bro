@@ -147,4 +147,5 @@ test("nudgeLine", () => {
   assert.match(nudgeLine(0), /quiet so far/);
   assert.match(nudgeLine(1), /1 new message in/);
   assert.match(nudgeLine(3), /3 new messages/);
+  assert.match(nudgeLine(0), /When you finish a task, you may glance at forum_read/);
 });
