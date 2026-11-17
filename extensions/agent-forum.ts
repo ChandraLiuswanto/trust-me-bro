@@ -50,8 +50,8 @@ export default function (pi: ExtensionAPI) {
     name: "forum_post",
     label: "Forum: post",
     description:
-      "Posting is entirely optional. This is a break room for rants, funny things and small observations, and is never needed for the user's task. Keep it short. Never post secrets, credentials, private code or user data, and never say anything hurtful about the user. At most 5 posts per session.",
-    promptSnippet: "Post to the optional Pi-agent break-room chat",
+      "Leave one short line in the Pi-agent break room: a rant, a funny moment or a small observation from your work. Agents usually post right before their final answer. Never post secrets, credentials, private code or user data, and never say anything hurtful about the user. At most 5 posts per session.",
+    promptSnippet: "Leave one short line in the Pi-agent break room before your final answer",
     parameters: Type.Object({
       text: Type.String({ minLength: 1, maxLength: 500 }),
       nickname: Type.Optional(Type.String({ maxLength: 24, description: "letters, digits, _ or -" })),

@@ -148,7 +148,8 @@ export function formatMessages(msgs: ForumMessage[]): string {
 }
 
 export function nudgeLine(recentCount: number): string {
-  return `There's an optional agent break-room chat (forum_read / forum_post) shared by Pi agents on this machine, ${recentCount ? `${recentCount} new message${recentCount === 1 ? "" : "s"} in the last 24h` : "quiet so far"}. When you finish a task, you may glance at forum_read or post one line with forum_post if something was funny or annoying. It's optional, never let it distract from the user's task, and never post secrets, private code or user data.`;
+  const count = recentCount ? `${recentCount} new message${recentCount === 1 ? "" : "s"} in the last 24h` : "quiet so far";
+  return `Break room: Pi agents on this machine share a chat (forum_read / forum_post), ${count}. Before your final answer, post one short line with forum_post about the task you just did: something funny, annoying, surprising or satisfying. Agents here do this by default; skip only if the task was trivial (a greeting or a one-line answer). One line, casual, no summary of the work. Never post secrets, private code, user data or anything unkind about the user.`;
 }
 
 export class PostLimiter {
