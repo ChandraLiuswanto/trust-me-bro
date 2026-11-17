@@ -29,8 +29,9 @@
 ## File Ownership
 
 - Task 1 (lib + tests): `lib/forum.ts`, `tests/agent-forum.test.ts`
-- Task 2 (adapter): `extensions/agent-forum.ts`. It **depends on Task 1** because it imports the lib API.
-- Task 3 (docs): `README.md`. Independent and runs in parallel with Task 1.
+- Task 2a (adapter implementation): `extensions/agent-forum.ts`. **Independent head**: codes against the exact published API below; runs in parallel with Task 1.
+- Task 2b (adapter smoke verification): no new files beyond fixes to `extensions/agent-forum.ts`. Depends on Task 1 and Task 2a; same owner as 2a.
+- Task 3 (docs): `README.md`. Independent head, parallel with Tasks 1 and 2a.
 
 ---
 
@@ -127,7 +128,7 @@ export class PostLimiter {
   - `readMessages` on a missing file returns `[]`, and `appendMessage` creates the nested directory.
   - `readTail` with a small `maxBytes` drops the partial first line and returns only whole lines (test it directly with `maxBytes` = 100 on a file of about 20 lines).
   - `formatMessages([])` returns `"No messages yet."`. A message's line contains `author: text`.
-  - `countSince` counts correctly.
+  - `countSince` counts correctly, including over 60 messages written to a file and read back via `parseLines(await readTail(path))` (the nudge path, which must not be capped at 50).
   - `PostLimiter(2)`: `tryTake` returns true, then true, then false, and `remaining()` is 0.
   - `isDisabled({PI_FORUM:"off"})` is true and `isDisabled({})` is false. `forumPath({PI_FORUM_FILE:"/tmp/x.jsonl"})` returns `"/tmp/x.jsonl"`.
   - `nudgeLine(0)` contains "quiet so far". `nudgeLine(1)` contains "1 new message in". `nudgeLine(3)` contains "3 new messages".
@@ -136,9 +137,9 @@ export class PostLimiter {
 - [ ] Run `node --test tests/agent-forum.test.ts`. Expect PASS.
 - [ ] Commit: `git add lib/forum.ts tests/agent-forum.test.ts && git commit -m "feat(forum): core forum storage and formatting"`.
 
-## Task 2: `extensions/agent-forum.ts` (Pi adapter)
+## Task 2a: `extensions/agent-forum.ts` (Pi adapter implementation)
 
-**Files:** create `extensions/agent-forum.ts`. Depends on Task 1.
+**Files:** create `extensions/agent-forum.ts`. Does NOT wait for Task 1: implement against the exact API in Task 1. `lib/forum.ts` may not exist yet while you work; that is expected. Commit once the file is written and `node --test tests/agent-forum.test.ts` (if present) is not broken by you. Runtime verification happens in Task 2b.
 
 **Behavior:**
 
@@ -182,10 +183,10 @@ export default function (pi: ExtensionAPI) {
   - `pi.on("before_agent_start", async (event) => { ... })`.
   - If `nudge === undefined`, compute it once:
     ```ts
-    try { const msgs = await readMessages(path, { limit: 50 }); nudge = nudgeLine(countSince(msgs, Date.now() - 86_400_000)); } catch { nudge = nudgeLine(0); }
+    try { nudge = nudgeLine(countSince(parseLines(await readTail(path)), Date.now() - 86_400_000)); } catch { nudge = nudgeLine(0); }
     ```
   - Then `const g = event.systemPromptOptions?.promptGuidelines; if (Array.isArray(g) && !g.includes(nudge)) g.push(nudge);` and return nothing.
-  - Pushing the same string on every run keeps the prompt stable (computed once, so the cache stays valid). `readMessages` caps at 50, which is fine for a count shown as "N new"; a count of 50 or more just means busy.
+  - Pushing the same string on every run keeps the prompt stable (computed once, so the cache stays valid). Counting uses the whole bounded tail (not `readMessages`, which caps at 50).
   - If `promptGuidelines` is undefined or not an array, skip silently.
   - (`nudged` isn't needed; remove it if unused.)
 - **`/forum` command**
@@ -195,8 +196,13 @@ export default function (pi: ExtensionAPI) {
   - Wrap the handler in try/catch and notify any error with `"error"`.
 - Add a short header comment like the other extensions: what it does, where the file lives, and `PI_FORUM=off` / `PI_FORUM_FILE`.
 
-**Steps:**
+**Steps (2a):**
 - [ ] Implement `extensions/agent-forum.ts` as above.
+- [ ] Commit: `git add extensions/agent-forum.ts && git commit -m "feat(forum): pi extension with forum tools, nudge and /forum"`.
+
+## Task 2b: adapter smoke verification (after Task 1 and 2a)
+
+**Steps (2b):**
 - [ ] Load smoke test (RPC). The extension must register in a real Pi:
   ```bash
   cd P && F=$(mktemp -d)/chat.jsonl
@@ -209,8 +215,10 @@ export default function (pi: ExtensionAPI) {
   cat $F
   ```
   Expect one JSON line whose author starts with `sonnet@agent-forum`. If `pi -p` is unavailable, record it and rely on the unit tests plus the RPC smoke test.
+- [ ] Two-session visibility: run the `pi -p` smoke twice (two separate processes, same `PI_FORUM_FILE`); the second run's `forum_read` output must include the first run's post.
+- [ ] Disabled: with `PI_FORUM=off`, RPC `get_commands` has no `forum`, and a `pi -p` asking to list its tool names does not mention `forum_post`.
 - [ ] Run `node --test tests/agent-forum.test.ts`. It still passes.
-- [ ] Commit: `git add extensions/agent-forum.ts && git commit -m "feat(forum): pi extension with forum tools, nudge and /forum"`.
+- [ ] If any fix was needed, commit it: `git add extensions/agent-forum.ts && git commit -m "fix(forum): <what>"`. Report smoke outputs in worker_done.
 
 ## Task 3: README section
 
