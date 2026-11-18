@@ -79,7 +79,7 @@ Running `git switch -c` inside the default-branch checkout does not meet this ru
 
 **After approval**, in order:
 
-1. Pick the pipeline worktree (Pipeline Worktree above).
+1. Pick the pipeline worktree (Pipeline Worktree above). Then name the Orca run: `orca orchestration run-create --objective "gg: <topic>" --json`; record its run ID in plan decisions. Later `worker-start` calls join this bound run; otherwise Orca names it after the first task (e.g. "Plan review").
 2. Write the spec to `<P>/docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit it there. The implementation plan is a separate later file.
 3. Show the remaining stages once and say: “No further human approval gates before integration; blockers still stop execution.”
 
@@ -87,7 +87,7 @@ Then initialize the complete active `update_plan`; keep one step in progress and
 
 ## 5. Finish and Wait
 
-Before presenting integration options, close every helper terminal in the roster with `orca terminal close --terminal <H> --json` (workers, reviewers and fix owners). Never close your own `$ORCA_TERMINAL_HANDLE`. Record the closures in plan progress.
+Before presenting integration options, close every helper terminal in the roster with `orca terminal close --terminal <H> --json` (workers, reviewers and fix owners). Never close your own `$ORCA_TERMINAL_HANDLE`. Record the closures in plan progress. Afterwards Orca still lists these workers as `retained` / `unverifiable`: a `--terminal` worker's terminal is never Orca-owned, so it is never released. This is expected and cosmetic. `worker-release` and `worker-stop` cannot clear it. `orchestration reset` wipes every run's tasks or messages, so run it only on the user's explicit request after naming that cost.
 
 **Cleanup after integration** (when the user asks): close only finished beads, by explicit ID; leave open or blocked ones open. Remove the pipeline worktree and its merged local branch together with `orca worktree rm --worktree path:<P> --delete-branch --json` (from outside P). If the result shows the branch kept, try `git -C <source checkout> branch -d gg/<topic>`; `-d` refuses unmerged work, so if it refuses too, keep the branch and tell the user. Never force-delete with `git branch -D`. A remote branch is deleted only on the user's explicit request.
 
