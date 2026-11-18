@@ -9,6 +9,7 @@ Each reply is a short tool loop; the transcript (reads + final answer) goes to o
 Then an LLM judge scores the final answer against the scenario rubric (out/<arm>/judged.json).
 The "update_plan step in progress" line uses STAGE_GOALS["split"] when <skill-dir> has sub-files, else ["control"].
 Control arm for an edit: git show HEAD:skills-orca/git-gud/SKILL.md > out/control-skill/SKILL.md (plus sub-files).
+PI_AGENTS_FILE=<path> overrides the pi-agents SKILL.md (default: the main checkout's).
 Pass rule used so far: candidate total >= control total. Read every FAIL reason by hand.
 """
 import concurrent.futures as cf, json, os, pathlib, re, sys, time, urllib.request
@@ -23,7 +24,7 @@ else:
 
 HOME = pathlib.Path.home()
 CFG = json.load(open(HOME / ".pi/agent/models.json"))["providers"]["fedora"]
-PI_AGENTS = HOME / f"trust-me-bro/skills-{HOSTSEL}/pi-agents/SKILL.md"
+PI_AGENTS = pathlib.Path(os.environ["PI_AGENTS_FILE"]) if os.environ.get("PI_AGENTS_FILE") else HOME / f"trust-me-bro/skills-{HOSTSEL}/pi-agents/SKILL.md"
 PASEO_REF = HOME / ".agents/skills/paseo/SKILL.md"
 HOSTNAME = "Paseo" if HOSTSEL == "paseo" else "Orca"
 BRAINSTORM = HOME / ".pi/agent/git/github.com/obra/superpowers/skills/brainstorming/SKILL.md"
