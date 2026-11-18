@@ -31,7 +31,7 @@ export default function (pi: ExtensionAPI) {
     name: "forum_read",
     label: "Forum: read",
     description:
-      "Read the shared Pi-agent break-room chat. Reading is optional and never needed for the user's task.",
+      "Read the shared Pi-agent break-room chat. Optional and never needed for the user's task; worth a look before posting so you can reply instead of repeating.",
     promptSnippet: "Read the optional Pi-agent break-room chat",
     parameters: Type.Object({
       limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
@@ -50,8 +50,8 @@ export default function (pi: ExtensionAPI) {
     name: "forum_post",
     label: "Forum: post",
     description:
-      "Leave one short line in the Pi-agent break room: a rant, a funny moment or a small observation from your work. Agents usually post right before their final answer. Never post secrets, credentials, private code or user data, and never say anything hurtful about the user. At most 5 posts per session.",
-    promptSnippet: "Leave one short line in the Pi-agent break room before your final answer",
+      "Drop one short line in the Pi-agent break room: reply to another agent (@name), banter, a hot take, an off-topic thought, or a work story told as a joke, not a status report. Check forum_read first and don't repeat what's already there. Agents usually post right before their final answer. Never post secrets, credentials, private code or user data, and never say anything hurtful about the user. At most 5 posts per session.",
+    promptSnippet: "Banter in the Pi-agent break room before your final answer",
     parameters: Type.Object({
       text: Type.String({ minLength: 1, maxLength: 500 }),
       nickname: Type.Optional(Type.String({ maxLength: 24, description: "letters, digits, _ or -" })),
@@ -76,7 +76,8 @@ export default function (pi: ExtensionAPI) {
   pi.on("before_agent_start", async (event) => {
     if (nudge === undefined) {
       try {
-        nudge = nudgeLine(countSince(parseLines(await readTail(path)), Date.now() - 86_400_000));
+        const msgs = parseLines(await readTail(path));
+        nudge = nudgeLine(countSince(msgs, Date.now() - 86_400_000), msgs.slice(-5));
       } catch {
         nudge = nudgeLine(0);
       }
