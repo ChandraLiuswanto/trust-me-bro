@@ -4,7 +4,7 @@ Read before creating or reusing any worker or reviewer terminal, or changing a w
 
 ## Routing
 
-Every delegated agent is a **Pi** worker on a **`fedora/`** model. Start it as an Orca terminal with `--command "pi --model fedora/<model> --thinking <effort>"`, then run `worker-start --terminal <handle>` (see `pi-agents`). `worker-start --agent pi --model …` is refused, and a bare `--agent pi` runs Pi's default model. Pi's `fedora` provider is the 9Router gateway, and every family, Claude included, runs through it. Never use Orca's `claude`/`codex` agents or a bare model ID. The parent may use any provider.
+Every delegated agent is a **Pi** worker on a **`fedora/`** model. Start it with `worker-start --agent pi --model fedora/<model> --effort <effort>` (see `pi-agents`); a bare `--agent pi` runs Pi's default model. Pi's `fedora` provider is the 9Router gateway, and every family, Claude included, runs through it. Never use Orca's `claude`/`codex` agents or a bare model ID. The parent may use any provider.
 
 The current orchestrator handles brainstorming/spec, implementation planning, coordination and final summary; keep its model and effort unchanged. The table governs delegated work. Sol means **GPT-6.1 Sol**; Astra means **GPT-6 Astra**.
 
@@ -21,9 +21,9 @@ Astra/Fable low is eligible for complex implementation only when the task is wel
 
 Choose one eligible model per assignment based on fit and availability; no family-percentage quota or mandatory Astra/Fable turn. Prefer cross-family review contrast when practical. When task complexity changes, re-evaluate the row and effort; update a suitable owner or hand off with ownership and context recorded. Original ownership never overrides routing eligibility.
 
-Launch exactly as `pi-agents` shows (terminal create → `terminal wait --for tui-idle` → `worker-start --terminal`), with these pipeline specifics: the parsed handle must be non-empty and start with `term_`, or nothing is dispatched; spec files go in `<P>/.scratch/specs/<role>-<bead>.md`; if `worker-start` exits non-zero, do not rerun it: read `failedStage` from its JSON and follow the orchestration recovery reference.
+Launch exactly as `pi-agents` shows (`worker-start --agent pi --model … --effort …`), with these pipeline specifics: record the returned `dispatchId` and `taskId`; spec files go in `<P>/.scratch/specs/<role>-<bead>.md`; if `worker-start` exits non-zero, do not rerun it: read `failedStage` from its JSON and follow the orchestration recovery reference.
 
-Before launching, find the current model IDs with `pi --list-models fedora`; never guess IDs. Thinking levels are `off|minimal|low|medium|high|xhigh|max`. Apply the table's effort through `--thinking`. When a reused agent changes role, update it with `orca terminal send --terminal <H> --text "/thinking <level>" --enter` (or `/model fedora/<m>`) before its next task. Unsupported effort requires a supported alternative; never silently use high, except to match the planner's effort for review, or change parent/global settings.
+Before launching, find the current model IDs with `pi --list-models fedora`; never guess IDs. Thinking levels are `off|minimal|low|medium|high|xhigh|max`. Apply the table's effort through `--effort`. A follow-up keeps the worker's model and effort; when a role needs a different model or effort, start a new worker for it. Unsupported effort requires a supported alternative; never silently use high, except to match the planner's effort for review, or change parent/global settings.
 
 On confirmed Claude usage-limit failure, record it and stop creating or prompting Claude-family agents for the rest of the five-hour window; no quota probes or artificial work. Substitute Sol or Astra only where the task's row permits, at its required effort; otherwise report a blocker. For other route failures, disclose an eligible same-role substitution or report a blocker. Never broaden the matrix to work around availability.
 
@@ -31,7 +31,7 @@ On confirmed Claude usage-limit failure, record it and stop creating or promptin
 
 Reuse suitable idle owners before creating agents: normally one worker per active file lane and one independent reviewer. This overrides fresh-worker-per-task defaults. Original owners fix their findings; reviewers remain read-only and never approve their own implementation. Reuse the plan reviewer for final review when suitable.
 
-Keep a compact roster in plan decisions: terminal handle, last dispatch ID, model, role/effort, worktree, files/beads, reviewer, pending turn, processed completion, spec/plan revision and next action. **One pending work turn per agent.** Queue follow-ups for busy owners; do not interrupt or introduce a competing editor. Independent ready lanes still run concurrently: assign another suitable idle worker or create one for an uncovered lane. If an owner is unavailable or unsuitable, record why and hand off to a suitable non-reviewer without violating file isolation.
+Keep a compact roster in plan decisions: last dispatch ID, task ID, model, role/effort, worktree, files/beads, reviewer, pending turn, processed completion, spec/plan revision and next action. **One pending work turn per agent.** Queue follow-ups for busy owners; do not interrupt or introduce a competing editor. Independent ready lanes still run concurrently: assign another suitable idle worker or create one for an uncovered lane. If an owner is unavailable or unsuitable, record why and hand off to a suitable non-reviewer without violating file isolation.
 
 Bootstrap once with task, ownership, acceptance criteria, spec/plan paths and constraints. Follow-ups carry only changed findings, files, evidence and next action. Run `bd prime` initially, after confirmed context loss, or after a beads error—not on every turn. Each new bead still requires live ownership/dependency checks and an atomic claim; remembered context never authorizes task-state changes.
 

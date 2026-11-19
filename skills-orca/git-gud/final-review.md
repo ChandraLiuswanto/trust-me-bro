@@ -21,7 +21,7 @@ Critical or Important findings force FAIL; Minor findings do not block. A missin
 
 Route valid results mechanically:
 
-- **Initial Critical/Important findings:** create fix beads, link coupled dependencies, and dispatch to original owners with green tests and task commits. Send the **same reviewer one follow-up** as a new `worker-start` on its existing terminal handle, carrying finding/fix deltas and affected invariants; broaden scope for cross-cutting changes.
+- **Initial Critical/Important findings:** create fix beads, link coupled dependencies, and dispatch to original owners with green tests and task commits. Send the **same reviewer one follow-up** with `send --to dispatch:<last review dispatch>` (it reopens the reviewer's session), carrying finding/fix deltas and affected invariants; broaden scope for cross-cutting changes.
 - **Remaining or new Critical/Important findings after that re-review:** report unresolved blockers and stop for the user. No further autonomous fix/review cycle; integration is not ready.
 - **Minor findings:** these fixes land after the last review, so they are capped. Fix at most **3** Minor findings, each **≤20 changed lines** and **≤60 lines in total** (insertions + deletions from `git diff --numstat`). Each fix gets its own commit with the full suite passing. List them in the summary under **Unreviewed changes** (finding → commit, “not independently reviewed”). Every other Minor finding becomes a report note. No splitting a fix to fit the cap, and no additional review round for nits. Critical/Important findings never go here.
 - **Clean pass:** proceed to Finish, without another gate.

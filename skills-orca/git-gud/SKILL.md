@@ -31,7 +31,7 @@ When you initialize `update_plan` after approval, start each step's goal with th
 **Hard rules (the files give the full procedure):**
 
 - Nothing is created before the exact `lgtm`/`LGTM` reply (section 1).
-- Workers: Pi on `fedora/` models only, via `terminal create --command "pi --model fedora/<m> --thinking <e>"` → `terminal wait --for tui-idle` → `worker-start --terminal`. Never `worker-start --agent pi --model`.
+- Workers: Pi on `fedora/` models only, via `worker-start --agent pi --model fedora/<m> --effort <e>` (Orca owns and releases them). Never `terminal create` + `worker-start --terminal`: those workers are never released and linger as dead `retained`/`unverifiable` entries.
 - Never replace a worker without a confirmed `worker-stop`; silence is not a stopReason; never poll. Reviewers are never replaced.
 - Every bead carries this run's unique label; never `bd init` on an error other than "No active beads workspace found"; done means every labelled bead is `closed` (`bd list -l "$L" --all -n 0 --json`).
 - One plan review, one final review, at most one re-review. Minor fixes after it: at most 3, ≤20 lines each, ≤60 total.
@@ -41,7 +41,7 @@ When you initialize `update_plan` after approval, start each step's goal with th
 
 **REQUIRED SUB-SKILL: `pi-agents`** for every worker and reviewer. It owns launch, model selection, context delivery and completion handling. Delegate only through Orca orchestration workers (`orca orchestration worker-start`). Never use `pi -p`/`pi --mode rpc` subprocesses or generic Pi `Agent`/`SubagentWorkflow`. If Orca orchestration or a required workflow capability is unavailable, report a blocker instead of quietly substituting another tool.
 
-Record the pipeline worktree (see Pipeline Worktree) by its ID and absolute checkout path, following the Same-Worktree Pipelines contract in `pi-agents`. Every `terminal create` and `worker-start` passes `--worktree path:<pipeline path>`. Never use `new-child`/`new-top-level` per stage or bead. This overrides delegated skills' isolation defaults unless the user explicitly requests otherwise. Serialize overlapping edits, shared-output builds and Git mutations; freeze reviewed files during review. Preserve existing work. For legacy multi-worktree runs, report the mismatch and agree on safe consolidation before launching editors; never discard changes to enforce placement.
+Record the pipeline worktree (see Pipeline Worktree) by its ID and absolute checkout path, following the Same-Worktree Pipelines contract in `pi-agents`. Every `worker-start` passes `--worktree path:<pipeline path>`. Never use `new-child`/`new-top-level` per stage or bead. This overrides delegated skills' isolation defaults unless the user explicitly requests otherwise. Serialize overlapping edits, shared-output builds and Git mutations; freeze reviewed files during review. Preserve existing work. For legacy multi-worktree runs, report the mismatch and agree on safe consolidation before launching editors; never discard changes to enforce placement.
 
 ## Pipeline Worktree
 
@@ -87,7 +87,7 @@ Then initialize the complete active `update_plan`; keep one step in progress and
 
 ## 5. Finish and Wait
 
-Before presenting integration options, close every helper terminal in the roster with `orca terminal close --terminal <H> --json` (workers, reviewers and fix owners). Never close your own `$ORCA_TERMINAL_HANDLE`. Record the closures in plan progress. Afterwards Orca still lists these workers as `retained` / `unverifiable`: a `--terminal` worker's terminal is never Orca-owned, so it is never released. This is expected and cosmetic. `worker-release` and `worker-stop` cannot clear it. `orchestration reset` wipes every run's tasks or messages, so run it only on the user's explicit request after naming that cost.
+Before presenting integration options, run `orca orchestration worker-list --json` and `worker-release --dispatch <id> --json` any roster worker still listed open (kept-open advisors, or one whose automatic release has not happened yet). Never close your own `$ORCA_TERMINAL_HANDLE`. Record the releases in plan progress. Leftover `retained`/`unverifiable` rows from workers launched in self-created terminals are cosmetic and covered in `pi-agents` (never run `orchestration reset` unprompted).
 
 **Cleanup after integration** (when the user asks): close only finished beads, by explicit ID; leave open or blocked ones open. Remove the pipeline worktree and its merged local branch together with `orca worktree rm --worktree path:<P> --delete-branch --json` (from outside P). If the result shows the branch kept, try `git -C <source checkout> branch -d gg/<topic>`; `-d` refuses unmerged work, so if it refuses too, keep the branch and tell the user. Never force-delete with `git branch -D`. A remote branch is deleted only on the user's explicit request.
 

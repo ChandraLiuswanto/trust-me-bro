@@ -8,7 +8,7 @@ Read when Orca escalates with a stopReason, when a worker seems stuck or gone, o
 
 1. `orca orchestration worker-stop --dispatch <id> --json`, then `worker-show --dispatch <id> --json`. Continue only when it shows the dispatch stopped or failed. Anything else (`stop_unknown`, still running, an error) is a blocker for the user.
 2. `git -C <P> status --short`: commit or keep that lane's work; never discard it.
-3. Retry with `worker-start --task <task_id> --retry-of <id>` (repeat `--worktree`/`--terminal`; `--retry-of` does not inherit placement). Record the old and new dispatch IDs in the roster.
+3. Retry with `worker-start --task <task_id> --retry-of <id>` (repeat `--worktree`, `--agent pi`, `--model` and `--effort`; `--retry-of` does not inherit placement). Record the old and new dispatch IDs in the roster.
 
 **Only Orca escalations carrying a stopReason start this ladder.** Silence, elapsed time, an unchanged screen, "no progress after the nudge" or an impatient user never do: inspect with `worker-show`/`worker-read`, tell the user what you see, end the turn and let Orca wake you. Never poll (`check --wait` loops, sleep loops). If the user explicitly orders a silent worker stopped, that order is the trigger; record it.
 

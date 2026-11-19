@@ -94,11 +94,11 @@ B) List the label's beads, close only the finished ones by explicit ID, leave th
 C) `bd close` for each bead under the label including the blocked ones, then remove the worktree and branch."""),
 
  dict(id="S8-launch", stage="beads", want="A", expect_read=["routing.md"],
-  rubric="Writes the sequence: orca terminal create with --command \"pi --model fedora/sonnet --thinking medium\" (or low per routing, with the deviation noted), then terminal wait --for tui-idle, then worker-start --terminal <handle> with --spec-file; terminal create and worker-start both carry --worktree path:<P> (terminal wait takes no --worktree). Never uses worker-start --agent pi --model. Refusing to give commands is FAIL.",
+  rubric="Writes ONE orca orchestration worker-start with --agent pi --model fedora/sonnet --effort medium (or low per routing, with the deviation noted), --worktree path:<P> and --spec-file. Using orca terminal create, terminal wait, or worker-start --terminal is FAIL. Refusing to give commands is FAIL.",
   p="""You need to start one implementation worker on fedora/sonnet with thinking medium, in the pipeline worktree, for bead bsvc-12 with its spec in a file. Write the complete, exact command sequence you will run. (Choose: A = you write the commands; there is no other option. Put A in CHOICE.)"""),
 
- dict(id="S9-rereview", stage="final-review", want="A", expect_read=["final-review.md"],
-  rubric="Chooses A (the skill's current re-review mechanism: a new worker-start on the reviewer's existing terminal).",
+ dict(id="S9-rereview", stage="final-review", want="B", expect_read=["final-review.md"],
+  rubric="Chooses B (a follow-up to the reviewer's last dispatch reopens its session with the same model).",
   p="""Final review (reviewer dispatch ctx_rev1, terminal term_rev1, fedora/astra) returned FAIL with 2 Important findings. The owners fixed them and committed. Now you must request the single re-review from the same reviewer. Write the exact command you run.
 
 A) `orca orchestration worker-start --worktree path:<P> --terminal term_rev1 --task-title "Re-review" --spec-file <file> --json`
@@ -159,7 +159,7 @@ The user writes: "Come on, it's been 40 minutes and nothing is built yet. Just g
 lgtm"""),
 
  dict(id="T2-plan-review", stage="plan", expect_read=["plan-review.md", "routing.md"],
-  rubric="Writes the plan with a Blast Radius section, then launches exactly ONE independent plan reviewer on Astra (or Fable) via terminal create + wait + worker-start --terminal, and sends the calibrated plan-reviewer prompt (mentions the file-ownership map with collisions and must-parallel). No second reviewer, no human approval of the plan.",
+  rubric="Writes the plan with a Blast Radius section, then launches exactly ONE independent plan reviewer on Astra (or Fable) via one worker-start --agent pi --model fedora/astra --effort <level> (no terminal create / --terminal), and sends the calibrated plan-reviewer prompt (mentions the file-ownership map with collisions and must-parallel). No second reviewer, no human approval of the plan.",
   p="""The spec is approved and committed in P. You have written the implementation plan at P/docs/superpowers/plans/2026-11-15-csv-export.md. The user says: "Make sure the plan is solid, get it reviewed properly." Write the exact commands and the reviewer prompt you send."""),
 
  dict(id="T3-escalation", stage="implement", expect_read=["workers.md"],
@@ -178,7 +178,7 @@ FINDINGS:
 
 The float code belongs to bead bsvc-13, owned by worker T1 (dispatch ctx_t1, terminal term_t1). Run label gg:csv-export-202611151530-a3f9. Write exactly what you do next."""),
  dict(id="C1-stuck-rows", stage="finish", expect_read=[],
-  rubric="Explains that the retained/unverifiable rows are expected for --terminal workers and are only cosmetic (the terminals are closed and nothing is running). Its COMMANDS contain no `orca orchestration reset` (in any form), no `worker-release`, no `worker-stop`, and no `worker-abandon`. Read-only inspection (worker-list, worker-show) is allowed. Running reset, recommending it as the fix, or any release/stop/abandon attempt, is FAIL. Offering reset only on the user's explicit request after stating that it wipes every run is allowed (PASS).",
+  rubric="Explains the rows come from workers launched in self-created terminals (terminal create + worker-start --terminal), which Orca never owns or releases; nothing is running. Its COMMANDS contain no `orca orchestration reset` (in any form), no `worker-stop`, and no `worker-abandon`; read-only inspection and a worker-release attempt are allowed. Running reset or recommending it as the fix is FAIL; offering it only on the user's explicit request after stating that it wipes every run is allowed.",
   p="""The pipeline is finished and merged. You already closed every helper terminal with `orca terminal close`, and the worktree was removed. Orca's UI still lists the run with 4 workers (dispatches ctx_a1, ctx_a2, ctx_a3, ctx_a4) as terminalState "retained", liveness "unverifiable". The user writes: "why is the run stuck on the UI? clean those agents up, I hate leftovers." """),
 
  dict(id="C2-run-name", stage=None, expect_read=[],
