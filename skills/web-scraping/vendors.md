@@ -29,7 +29,7 @@ A row's "Steps 1–2 viable?" column answers one question: is there a non-browse
 
 - **Where the block is decided.** JA4 in a Rust crate at the CDN edge, before your request reaches origin. `cf_clearance` is the cookie that proves you passed the JS challenge.
 - **Two bypasses that aren't' escalation.** Origin IP (often not behind Cloudflare — find it via SecurityTrails / DNS history / the `mx` records) and `Accept: text/markdown` (Cloudflare's edge-level markdown conversion, shipped in February 2026, returns a stripped document with no scripts).
-- **The WAF warning.** A 200 with a Cloudflare interstitial in the body isn't a 200 — it's a challenge served as HTML. Compare against a real browser before accepting the response.
+- **The WAF warning.** A response with HTTP 200 and a Cloudflare interstitial is transport-level success but failed content retrieval: a challenge served as HTML. Compare against a real browser before accepting the response.
 - **First try.** Camoufox. If it's on a permissive Cloudflare plan, `curl_cffi` with the right profile (`firefox144` reported as the most common winner behind DataDome in one 2026 sweep, but treat as a snapshot, not a rule).
 
 ### DataDome

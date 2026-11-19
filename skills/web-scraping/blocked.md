@@ -15,7 +15,7 @@ Before doing anything else, place the target on the difficulty ladder. Tier 1 jo
 | 1 — Open | Data is in `view-source`. | Afternoon. |
 | 2 — Light | Works at first; 429s under load. | Day or two. Honest headers, real rate control, not heavy machinery. |
 | 3 — Dynamic | Empty in `view-source`, full in browser. | Real browser, or the API behind the page (preferred). |
-| 4 — Fingerprinting | Blocked instantly; site loads fine in your own browser. | Engine-level stealth. Rotating proxies don't help — the block is about *who you look like*. |
+| 4 — Client-dependent refusal | Script refused; browser works. | Compare authorization, cookies, redirects and transport before attributing it to fingerprints. |
 | 5 — Behavioural | Passes once, flagged the moment you scale. | The hard rung. Looking human over the whole session beats being fast. |
 
 The classic failure is quoting an afternoon for what is really a month because nobody checked which wall was there. Check the wall first.
@@ -26,15 +26,15 @@ The classic failure is quoting an afternoon for what is really a month because n
 
 This is the diagnostic that saves the week. Before changing anything, compare a *real browser session* and your *scripted request* on the same network, with the same URL, the same headers if possible, and the same exit IP.
 
-- **Script returns 403; real browser returns 200.** A fingerprint layer is refusing you. Walk §2 below.
-- **Script and browser both return 403 from this network.** The IP is bad. Move to `proxies.md` — pick a different exit type (residential, mobile) and rerun the comparison.
-- **Script and browser both return 200.** You weren't actually blocked; the page was Tier 3, not Tier 4. Read `data-sources.md` and look for the XHR endpoint.
+- **Script returns 403; real browser returns 200.** Compare URL, method, authorization, cookies, redirects and response bodies first. Fingerprinting is one hypothesis, not a conclusion; walk §2 only after controlling these differences.
+- **Script and browser both return 403 from this network.** Shared IP policy is possible, but so are authorization and site restrictions. Capture the refusal evidence before considering `proxies.md`; an IP change cannot establish permission.
+- **Script and browser both return 200.** Compare actual content and expected records; either response may still be a challenge or soft error. For confirmed JS-only content, read `data-sources.md`.
 
-> **Why this works.** It changes exactly one variable at a time. If the same script body, the same headers, and the same URL change outcome by changing only the transport, the transport is the variable. Hours spent tuning headers with a `requests` library, on a target that drops the TLS handshake at the load balancer, prove something that was already true.
+> **Interpretation limit.** Browser versus script changes several variables, including cookies, execution, headers and transport. Use the comparison to choose a narrower experiment. Attribute a cause only after controlling the other differences.
 
 ## 2. The four questions a defender asks
 
-A modern anti-bot stack scores you across four layers before a single byte of your JavaScript runs. Most blocks are decided here, not in the JS challenge. Hold these in mind when you read a 403 — it usually means one of the four is failing, not the page.
+When response evidence points to bot detection, investigate these four possible layers. Some checks precede JavaScript and others require execution or session history. A 403 alone does not identify any of them.
 
 1. **What does the client claim to be?** User-Agent, declared identity, Client Hints (`sec-ch-*`).
 2. **How does it connect?** TLS (JA3/JA4 from the ClientHello), HTTP/2 settings, ALPN, header order, pseudo-header order.
@@ -90,9 +90,9 @@ A pass on the first request that fails the moment you scale is a behaviour block
 
 - **Same headers succeed once the transport changes.** The headers were never the variable. Stop tuning them.
 - **Same library, same everything, different profile → different outcome.** The profile is the variable; don't escalate to a browser yet.
-- **Script and browser both blocked from the same network.** IP is the variable; don't tune headers or fingerprint, switch exit type.
+- **Script and browser both blocked from the same network.** Check shared authorization, policy, network and response evidence. IP reputation is one hypothesis; do not switch exits as a substitute for diagnosis.
 - **Different endpoints on the same host require different headers / referers / UA.** Anti-bot is deployed per route by different teams, so a single profile that satisfies both can't exist. Stop looking for a better global profile and start diffing what you sent to each. This is the same reasoning that makes endpoint enumeration beat accepting the hardest one.
-- **The page you're stuck on is a 200 with no useful data, not a 403.** You weren't blocked; you were served a JS-rendered page from a non-JS client. Read `data-sources.md` instead.
+- **The response is 200 with no useful data.** Inspect its body and final URL: JS rendering, challenges, login pages, soft 404s and genuine empty results can all look like this. Use `data-sources.md` for confirmed rendering gaps and `production.md` for content validation.
 - **You have spent more than 2 days/month on maintenance for a single target.** Walk to the parent skill, rung 6, and price a managed API against your own hours. (See `vendors.md` for the cost-per-usable-record framing.)
 
 ## 5. Two-trap rule
@@ -105,7 +105,7 @@ A pass on the first request that fails the moment you scale is a behaviour block
 - A `User-Agent: python-requests/x.y.z` and TLS handshake that announces the same client — perfect, because the entire JS fingerprint is now redundant. (Replace the library default before you copy a browser string. On 472 popular homepages fetched once with `httpx`, the library default got a full page on 353, a copied Chrome string on 375, and a descriptive bot string with contact details on 378 — so the browser string bought nothing on average while several major domains refused it outright. Treat as a sensible default, not a guarantee.)
 - A 200 with a `<noscript>` banner and a long inline challenge script — the curl got HTML, the browser would have got cookies. The fix is the cookie, not a fingerprint.
 - A block page naming a vendor different from the one your headers announced — you fixed the wrong layer.
-- A 403 only on the second page, never the first — a behaviour layer warmed up on the first page and fired on the second. The first request is often a courtesy; the second is the test.
+- A 403 only on the second page — compare pagination parameters, token/cookie state, authorization, pacing and response body. Behavioural detection is possible, not established.
 - A clean run for hours that dies on a specific URL pattern — anti-bot is route-scoped, not domain-scoped. Sweep other routes, especially the data-light ones (search, autocomplete, mobile, embed, sitemap-adjacent JSON, RSS, print view).
 
 ## 7. When this is the wrong skill

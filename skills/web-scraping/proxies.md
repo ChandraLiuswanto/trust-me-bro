@@ -80,10 +80,20 @@ Some limiters earn a token via browser sensor then don't bind the token to the w
 - **Don't rotate mid-session.** It's the cheapest mistake and the most expensive to debug.
 - **Don't reach for a proxy to fix a fingerprint problem.** A bad TLS profile stays bad behind a residential IP; the only thing that changes is the IP score. See `SKILL.md` for the order.
 
+## Failure attribution before rotation
+
+Record the failing phase separately: proxy authentication/CONNECT, DNS, TCP, TLS, target headers, body download or parsing. Capture timestamps, duration, status, sanitized error class, retry count and an opaque exit/session identifier; exclude credentials, cookies and sensitive query strings.
+
+Inspect [`Proxy-Status` (RFC 9209)](https://www.rfc-editor.org/rfc/rfc9209.html) when supplied. Its intermediary/error details can explain a proxy-generated failure; retain target status separately when actually observed. Proprietary provider codes require that provider's documentation, not guesses based on a familiar-looking number. Absence of `Proxy-Status` proves neither target nor proxy responsibility.
+
+Compare a bounded same-target probe under controlled conditions and correlate affected exits/sites before rotating. Proxy connection failure does not establish a target block; target refusal does not establish bad proxy reputation. Change one factor per follow-up and stop at the request budget.
+
+Source context: [proxy strategy](https://web-scraping-guide.com/#proxies).
+
 ## 9. Red flags
 
-- A 403 that's the same from a residential IP and a datacenter IP — the problem is your fingerprint, not the IP. See `SKILL.md` step 2.
-- A clean run for hours that suddenly 403s in one region — your pool's geo distribution just hit a regional ASN that's flagged. Re-pull a sample and check the `org` field.
+- The same 403 from residential and datacenter IPs — changing exit type did not resolve the refusal. Compare authorization, policy and response evidence before blaming fingerprints; see `blocked.md`.
+- A clean run that suddenly returns 403 in one region — compare exit ASN, session expiry, pacing and regional access policy. An ASN change is evidence to investigate, not proof of the cause.
 - A session that fails re-auth on a snapshot restore — your IP changed across the restore. Plan it as a re-login from the new location.
 - A target where a captcha-warmed cookie replay works for hours then stops — the token's bound here, or the `renewInSec` got shorter. Re-warm and re-test; do not assume the cheat is permanent.
 

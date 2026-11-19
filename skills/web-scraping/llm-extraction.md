@@ -2,6 +2,8 @@
 
 The case for letting a model read the page, the cost of doing it on every row, and the failure modes to engineer around.
 
+For PDFs, scans and tables, start with [documents.md](documents.md): choose text extraction or OCR, preserve layout and require field-level evidence.
+
 ## Cross-refs
 
 - `SKILL.md` for the decision ladder and build-vs-buy rung.
@@ -63,7 +65,7 @@ This is not glamorous. It scales because the model sees the page once and your r
 
 ## 5. Ten failure modes in scrapers an agent wrote for you
 
-Patterns the source guide saw across 34 findings in one vendor's open-source `claude-skills` plugin. None is specific to that vendor. **Run a check for each before you ship an agent-built scraper.**
+The checklist below is a local synthesis, not a verbatim enumeration of the guide's vendor audit. For the source's actual failure taxonomy, see [AI and LLM scraping](https://web-scraping-guide.com/#ai). **Run applicable checks before accepting an agent-built scraper.**
 
 1. **Selector that finds the wrong element.** Two adjacent nodes share a class; the agent picked the wrapper, not the value. Test on a held-out page set before accepting.
 2. **Confidence assigned to the wrong field.** A `high` confidence tag on a field the model hallucinated a value for. Confidence is the model's own estimate; it does not predict correctness on out-of-schema text.
@@ -72,16 +74,16 @@ Patterns the source guide saw across 34 findings in one vendor's open-source `cl
 5. **Pinned impersonation profile.** A frozen TLS / browser profile is itself a detection signal — re-test before relying.
 6. **Cost-recovery loop that re-authenticates forever.** Same trap as production self-healing, but inside the agent: it re-logs in after a forced password reset, a suspension, or a cease-and-desist. **Halt on those**, do not recover.
 7. **Selector that fails silently on a missing field.** The page no longer has the field; the agent returns `null` and the verifier does not flag it. Wire the verifier to count `null` against schema coverage.
-8. **Token-window trim that drops the evidence.** A model that summarises a long list to fit context silently redefines the site. The user is reading a list that no longer corresponds to the page. Track tokens in/out per call; a trim that "saves" 80% of tokens is also dropping 80% of evidence.
+8. **Token-window trim that drops the evidence.** A model that summarises a long list to fit context silently redefines the site. The user is reading a list that no longer corresponds to the page. Track tokens in/out per call; retain the true record/link count, sample size and truncation marker; token savings do not measure evidence loss.
 9. **Prompt injection that looks like a record.** A page contains text in JSON-LD or a hidden `display:none` span the model reads as instructions. Treat structured data as untrusted text before any model call. See §7.
 10. **Maintenance untracked.** "The agent fixed it" with no audit trail of which selector it picked, when it last passed, which samples supported it. Without a blackboard (`.scrape/site/`) the fix is not reproducible.
 
 ## 6. Browser agents: when to pay for them
 
-- **Cost.** Computer-use agents are reported as 2.7–4.3× more steps than they need; a ten-step automation flow with Playwright MCP costs ~7K tokens in 2026, ~50K with Chrome DevTools MCP, ~114K with Playwright MCP. Two-thirds of the bill is the browser tool.
+- **Cost.** Benchmark the same completed task on your installed tool versions. Include tool definitions, page payloads, screenshots, cached tokens, retries, browser runtime and usable output. Published token counts are configuration-specific, not universal prices.
 - **Where they pay off.** Multi-step, interaction-heavy tasks where request-based scraping was never going to reach. A "point an agent at the UI" path is a real option when the schema is undocumented *and* the flow is non-trivial.
 - **Where they do not.** Bulk fetching on a request-based scraper built once is orders of magnitude cheaper. **Agents belong on the hard, low-volume, interaction-bound tail**, not on the bulk path.
-- **The shifting line.** First-generation browser agents translated the page into something the model could digest (DOM, a11y tree, screenshot) and asked the model to choose an action against it. That representation is lossy. The newer pattern: the agent *writes code once and runs it*. Same compile-and-run pattern, arrived at from the other direction. The first scales, the second demos.
+- **The shifting line.** First-generation browser agents translated the page into something the model could digest (DOM, a11y tree, screenshot) and asked the model to choose an action against it. That representation is lossy. The newer pattern: the agent *writes code once and runs it*. Same compile-and-run pattern, arrived at from the other direction. For repeated stable extraction, executable code usually amortizes better; interactive agents remain useful where navigation cannot yet be made reliable.
 
 ## 7. Prompt injection on the way in
 
@@ -94,7 +96,7 @@ This is now the highest-prevalence finding the source guide names for LLM-based 
 
 **Operational rules:**
 
-- **Never hand the model a flat plain-text page.** Across the study's 5,200 controlled trials, a page flattened to plain text was obeyed 3.9% of the time against 1.1% for HTML, because stripping the markup also strips the evidence that the text was hidden. Keep the structure.
+- **Preserve relevant structure and provenance when reducing page content.** Flattening may erase visibility and source boundaries; HTML is not itself safe either. Evaluate the representation on your extraction and injection tests, and enforce tool permissions outside the model.
 - **Treat JSON-LD and response headers as untrusted text before any model call.** Parse them with code, screen for instruction-like text first.
 - **Do not trust a client-side ID stored in `localStorage`** as a stable link; if it's gone, hardware signals (GPU renderer, screen, CPU + device memory) are the fallback.
 - **The image-puzzle CAPTCHA is the wrong lever.** Image challenges are losing ground to small open-weight vision models; one unpublished, n=1 report says fine-tuning a 2B model on ~200k hCaptcha images reached 90%+ on unseen classes. Treat in-house image solving as an upkeep commitment the defender sets, not a one-shot build.
@@ -104,9 +106,9 @@ This is now the highest-prevalence finding the source guide names for LLM-based 
 
 The most expensive LLM-scraping failure is the one that *looks correct*. A model that confidently returns a plausible `price` is harder to catch than a `null`.
 
-- **Cross-check with the deterministic path.** Where the LLM output and the regex output agree, trust; where they diverge, flag. Agreement is a far better signal than either confidence in isolation.
+- **Cross-check with the deterministic path.** Where outputs disagree, flag for review. Agreement is corroboration, not proof: both paths can share bad input or the same wrong interpretation. Check source evidence and independent expected values.
 - **Anchor on a typed schema.** `pydantic` / `instructor` / `outlines` — give the model a typed output target. It does not stop hallucination but it does narrow the failure surface to one place you can test.
-- **Bayesian confidence, not point estimates.** A Beta-distribution per field, updated on each verified sample, beats a single `confidence: 0.9` number. Source guide's architecture runs six math operations on a `scipy.stats.beta` over the verifier's row sample.
+- **Calibrate against independent labels.** Per-field Beta estimates are one source-proposed heuristic, not a demonstrated universal improvement. They require representative independently verified samples and explicit assumptions; distribution shift or correlated labels can invalidate them. They do not replace source evidence, held-out tests or review.
 - **Where the model earns its place.** On pages the deterministic path can't parse — skewed scans, odd layouts, missing labels, tables the rules can't catch. **Run rules first; LLM only on the failures.**
 
 ## 9. When this is the wrong skill
@@ -121,7 +123,7 @@ The most expensive LLM-scraping failure is the one that *looks correct*. A model
 
 - A vendor success rate over 95% quoted without a verifier pass rate, without an error/retry rate for model-written code, and without a ground-truth dataset.
 - A scraper whose model "auto-fixes" selectors on a schedule with no human-readable audit trail.
-- A token-trim step that "saves" 80% of input. The same 80% is the page's evidence the user is now missing.
+- A token-trim step without source counts, sample sizes and truncation markers. Token reduction alone does not quantify lost evidence.
 - An agent that re-logs in after a forced password reset, a suspension, or a cease-and-desist.
-- A pipeline that flattens the page to plain text before the model reads it.
+- A reduction pipeline that loses relevant structure, visibility or provenance without testing extraction accuracy and injection handling.
 - A "99% reduction in input tokens" headline that doesn't name what task it actually finished.

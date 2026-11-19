@@ -58,9 +58,9 @@ Look for:
 
 ### Rung 4 — Mobile app API
 
-The single most reliable bypass for HTML anti-bot: **the same site, on a phone, hits the same backend with far weaker protection.** Mobile teams ship faster and rarely have the same bot-mitigation budget as web.
+An authorized mobile API can expose useful structured data, but may have different authentication, coverage, signing and access restrictions. Compare its actual suitability rather than assuming weaker protection.
 
-Trade-offs and tools live in `mobile-api.md`. The short version: a rooted Android emulator + HTTPToolkit intercepts all HTTPS transparently; Frida hooks `SSL_read`/`SSL_write` directly when the app pins certs. If you can recover the API, the HTML anti-bot becomes irrelevant.
+Trade-offs and tools live in `mobile-api.md`. On an authorized test device, interception may expose API traffic, but certificate pinning, custom transports, attestation and session binding can prevent capture or replay. A usable API can avoid HTML parsing; it does not remove access controls or guarantee equivalent coverage.
 
 ### Rung 5 — Non-obvious endpoints (endpoint enumeration)
 
@@ -81,8 +81,8 @@ Anti-bot is usually deployed as a *rule on a route*, not a property of a domain,
 
 Some endpoints return data, but in shapes that need work:
 
-- **ProtoJSON (positional JSON arrays).** Google-style: no keys, paths through nested arrays, often prefixed with an anti-hijacking junk string like `)]}'`. Strip the prefix, `json.loads`, and then map indices to named constants. An LLM is genuinely good at this — give it a sample response + a rendered page, ask it to align visible values to array paths, then freeze the mapping into a parser. The mapping is a private schema, so it can shift; treat it like a brittle selector and put it behind the same self-healing triggers.
-- **QUERY method (RFC 10008, June 2026).** Some endpoints use the new `QUERY` verb instead of POST for filter-too-large-for-URL reads. Watch the `Allow` header for `QUERY`; if present, the endpoint is a read-only data API and its responses are cacheable.
+- **Private positional JSON arrays (not ProtoJSON).** Some endpoints return nested arrays without field names, sometimes prefixed with an anti-hijacking string such as `)]}'`. Standard [ProtoJSON](https://protobuf.dev/programming-guides/json/) is the Protocol Buffers JSON mapping, not a name for arbitrary positional arrays. Strip the prefix, `json.loads`, and then map indices to named constants. An LLM is genuinely good at this — give it a sample response + a rendered page, ask it to align visible values to array paths, then freeze the mapping into a parser. The mapping is a private schema, so it can shift; treat it like a brittle selector and put it behind the same self-healing triggers.
+- **Advertised methods.** `Allow` lists supported methods; it does not prove authorization, response cacheability or the safety of every operation on an endpoint. For a documented `QUERY` interface, verify method semantics, request shape, authentication and cache controls against its current specification and actual responses.
 
 ## 3. Endpoint checklist (paste into your plan)
 
@@ -96,7 +96,7 @@ Before you accept a target needs a full browser stack, confirm:
 - [ ] Mobile app API considered (see `mobile-api.md`).
 - [ ] First-page parity check: the JSON you got back actually matches what's rendered (not a partial / cached / placeholder payload).
 
-If you ticked at least three: write a 50-line script and ship. If you ticked zero: re-read this page before writing the scraper.
+Treat this checklist as reconnaissance, not a shipping gate. Validate access, required fields, pagination, requested scope, persistence and independent coverage before acceptance.
 
 ## 4. Common mistakes
 

@@ -63,7 +63,7 @@ Replaying a captured call gets you a 4xx on hardened apps because every request 
 The decision that shapes everything: **can you rebuild the signer, or do you have to borrow it?**
 
 - **Readable crypto (e.g. HMAC-SHA256 over a known string).** Reverse it in Ghidra, reimplement in Python, sign offline. Fast, no app in the loop, scales. This is the cleanest path and the one to prefer.
-- **Bytecode VM you cannot practically rewrite.** Keep the app running and drive its own signer as an oracle your scraper calls. This always works. It's slow.
+- **Bytecode VM you cannot practically rewrite.** Keep the app running and drive its own signer as an oracle your scraper calls. This may fail under attestation, session binding, anti-instrumentation or app updates; verify authorization and runtime feasibility before relying on it.
 - **Do not drive the app's UI as your primary signer.** Public natural-language Android-agent rates are 3–5 s/step (fast model) to 15–40 s/step (strong model). A 100-step run is 25–67 minutes on a single device. An offline signer mints the same header in milliseconds. Driving the UI is for the case you genuinely cannot rebuild the signer.
 
 ### The native-reversing toolchain

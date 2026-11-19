@@ -29,7 +29,7 @@ A modern firewall rarely hard-blocks you. It returns `200 OK` with a degraded bo
 
 ## 2. The architecture that survives
 
-Three pieces, composed:
+First attribute the failing stage using [repair-and-coverage.md](repair-and-coverage.md). For a confirmed extraction/selector defect, compose these three pieces:
 
 1. **Page objects** hold the selector and parse logic per field, isolated from the crawl loop. Test them with saved fixtures, not against the live site.
 2. **A field-coverage monitor** (Spidermon is the Scrapy-native one; the pattern is engine-agnostic) runs each cycle and **fails the run the moment coverage drifts** instead of at the end.
@@ -45,7 +45,7 @@ The most expensive production failures all return a 200:
 
 | Failure | What it looks like | Alarm |
 |---|---|---|
-| **Empty 200** | Status 200, body is `{"posts": [], "has_next_page": false}` | Before storing zero rows, run an *independent* call that confirms the entity you asked about exists and is non-empty |
+| **Empty 200** | Status 200, body is `{"posts": [], "has_next_page": false}` | Independently check whether the scoped population is genuinely empty; distinguish verified empty from failed discovery and unknown coverage before storing zero rows |
 | **Reduced 200** | 200 with 10% of yesterday's row count on the same schema | Alert on **count per endpoint per run**, not on status code |
 | **Challenge-as-200** | 200 with a Cloudflare interstitial in the body | Run a content check on every 2xx; match the body case-insensitively for `cf_chl`, `cf-turnstile`, "Just a moment", "Checking your browser" |
 | **Login wall as 200** | 200 with the login page served in place of a public feed (Facebook) | Empty feed on a live, populated group is a wall, not an empty group; raise, do not store |
@@ -58,7 +58,7 @@ The most expensive production failures all return a 200:
 
 **The one rule that catches all of these:** *Gate every write on a content classification, never on the status code.* Classify into `challenge`, `ok`, `hard_block`, and give each its own action: reroute `challenge` to a render path, back off on `hard_block`, run the rerouted response through the same detector before storing it.
 
-> An *empty result is only trustworthy once you have proved there was something to find.*
+> Trust an empty result only after validating the requested scope and independently checking that it can genuinely be empty. If discovery or fetching failed, report unknown coverage rather than zero records.
 
 ## 4. The challenge-page detector (a working pattern)
 
@@ -88,10 +88,10 @@ A self-healing loop has the right pattern for "selector moved a few classes": re
 - **Account suspended** — service-side decision; re-login escalates it
 - **Cease-and-desist letter received** — legal posture
 - **Terms of service changed and re-acceptance required** — re-accepting auto-replays the original terms through the new ones
-- **A consistent stream of 403s across rotating exit IPs** — likely a permanent fingerprint ban; rotating through it makes the legal case worse
+- **A consistent stream of unexplained 403s** — stop automatic rotation/retries and review access policy and response evidence; permanence and fingerprint cause are not established
 - **Cross-tenant data appearing in responses** — your session is being routed to another account's view
 - **Content that visibly matches a templated decoy** — site is serving bots a different site
-- **A `sitemap.xml` that doesn't match the navigation** — see §9
+- **Unexplained coverage loss beyond the acceptance threshold** — pause promotion, reconcile sitemap/navigation scope per §9 and report uncertainty; ordinary sitemap differences are an investigation signal, not automatically an emergency
 
 Keep a record of every re-login, the timestamp, the reason, and the response codes around it. A timeline showing you stopped when told is the difference in this line of cases (`hiQ v. LinkedIn`, `Power Ventures v. LinkedIn`).
 
@@ -105,11 +105,17 @@ A self-healing scraper is one unverified code-execution endpoint per field. The 
 2. **A deterministic parse step** that catches the two LLM failures that pass silently:
    - Field present in output but **not locatable in the source text** → suspect (probable hallucination).
    - Field absent or empty → missing.
-3. **A field-level confidence gate** (per-field Beta distribution updated on each verified sample beats a single `confidence: 0.9` number — a point estimate of model confidence is not evidence about the page).
+3. **Field-level acceptance gates** checked against independently labelled samples and source evidence. A model confidence score is not proof; statistical estimates need representative labels and validated assumptions, not automatic trust in a particular distribution.
 4. **A promotion gauntlet**: the rewritten selector must match the saved fixture *and* the live probe *and* the previous selector's run-overlap above a threshold. Miss any, roll back.
 5. **An audit log** with the field, the URL, the before/after selector, the test, the live probe, the timestamp, and a human-readable diff. *Without it, the fix is not reproducible.*
 
 The 7 binary failure-mode-per-field pattern (hallucinated / off-target / type mismatch / unreasonable / incomplete / format violation / name-desc mismatch), aggregated with `max` so a single confident flag escalates rather than averaging into silence, is the source guide's working example. *Never aggregate with `mean`.* A `mean` of seven zeros and one 0.99 is a 0.14, which looks like a pass.
+
+### Per-row provenance and independent test oracles
+
+Persist source URL, canonical/source ID, fetch time, requested date/window, language, response/content hash or authorized fixture reference, extractor/config version and run/attempt ID with each row. Retain raw and normalized values where needed to explain transformations; protect and expire sensitive source evidence.
+
+An extractor and its expected fixture output written by the same model can agree on the same mistake. Independently inspect expected values, retain held-out pages and test known missing/extra records. Carry population totals and explicit truncation markers alongside samples so a context-window trim cannot silently become the completeness baseline. Record model/provider failures separately from valid empty extraction.
 
 ## 7. The session rules that fail most often
 
@@ -124,26 +130,38 @@ These are not detection; these are correctness:
 
 ## 8. The "did you ever have the whole thing" question
 
-Every completeness idea in the source guide is *defensive* — did a field go missing, did coverage drop against the last run. **None of it answers the prior question: did you ever have all of it?**
+Change monitoring answers whether coverage deteriorated; independent population checks address a different question: **did the baseline ever cover the required population?**
 
 A crawl that has silently been seeing 70% of a catalogue since the day it launched has no delta to alert on, because the baseline was already wrong.
 
 **Sanity checks that do not require a baseline:**
 
-- `sitemap.xml` total compared to the count you collected, with the gap accounted for (out-of-stock, removed listings). *If a site publishes a sitemap, the gap is measurable. If it doesn't, the absence of one is itself a signal.*
+- `sitemap.xml` total compared to the count you collected, with the gap accounted for (out-of-stock, removed listings). Compare only aligned scopes: sitemaps may be partial, stale, recent-only or language-specific. Their absence does not establish missing content.
 - A *single* sample of a high-entropy field ("max price", "earliest date in the index") per run, fetched independently and compared.
 - A randomised 1% sample re-fetched and compared to last cycle.
-- A reverse-DNS check on the URL space: list all subdomains the site has ever served (DNS history, Common Crawl) and compare to what you visited. *A 30% delta is data.*
+- Use DNS history or crawl indexes as supplementary discovery leads within authorized scope, not an exhaustive URL inventory or a completeness denominator.
+
+### Cross-source entity resolution
+
+Keep source record IDs and provenance before merging records. Separate an entity (a publisher, product or person) from observations, editions and events about it.
+
+1. Prefer documented stable IDs and explicit cross-links. Normalize comparison fields without overwriting raw values.
+2. Generate candidates using blocking keys such as normalized domain plus publisher ID, or category plus a name prefix. Blocking reduces comparisons but can also hide true matches; test its recall.
+3. Compare multiple attributes with domain-appropriate rules: names, addresses, dates, identifiers and language. A title match alone does not establish that two articles or people are the same.
+4. Evaluate on independently labelled matching and non-matching pairs, including hard negatives. Measure precision and recall separately, choose thresholds by false-merge versus missed-match cost, and send ambiguous pairs to review.
+5. Preserve merge evidence, original IDs and an undo path. Recheck thresholds when source formats or populations change; never silently discard provenance during deduplication.
+
+Source context: [post-extraction](https://web-scraping-guide.com/#post-extract).
 
 ## 9. Sitemap disagreement (the cheap early warning)
 
-If the `sitemap.xml` doesn't match what the user-facing navigation shows, one of three things is true:
+If the `sitemap.xml` differs from user-facing navigation, investigate scope, freshness, language, pagination and publication-window differences. Other possibilities include:
 
 - The site has pages it doesn't list in the sitemap. Aka "blocked for being wasteful, not for crawling."
 - The site has sitemaps for pages that don't exist.
 - The site's CDN is geo-shaping the sitemap response.
 
-Run a sitemap parse separately from your crawl. Disagreement is an early signal — often weeks before a content-type change is rolled forward to the pages you're collecting.
+Run sitemap discovery separately from the main crawl and reconcile scoped ID sets. Disagreement is a diagnostic signal, not proof of a block or a forecast of a site change.
 
 ## 10. Crawler-side code-execution risk (the one to know about)
 
@@ -151,6 +169,18 @@ Run a sitemap parse separately from your crawl. Disagreement is an early signal 
 - **Remote-CDP mode in some stealth plugins** binds an unauthenticated credential-injecting proxy relay to `0.0.0.0`. Don't expose crawl workers on a public port.
 - **Dataset configs that load code.** A YAML config that names a "post-processing hook" can become a code-execution path. Treat configs as code.
 - **A crawler that follows a page's instructions and visits a new domain is browsing as you.** If you point a coding agent at the open web, give it the narrowest credentials that let it finish, keep secrets outside the context the page can influence, and put a deterministic allowlist on which domains and actions are permitted. **The page gets a vote on your agent.** See `llm-extraction.md` for the prompt-injection surface.
+
+### Browser and fetch boundaries
+
+Treat discovered URLs and page instructions as untrusted. Enforce these controls outside the model:
+
+- Allow only intended schemes, origins and ports. Validate every redirect and browser subresource, not just the initial URL. Resolve destinations and block loopback, private, link-local and cloud metadata addresses unless explicitly authorized; enforce egress policy to handle DNS rebinding and browser-side fetches.
+- Use isolated browser contexts and least-privilege credentials. Do not forward authorization headers or cookies to a different origin; do not attach a personal browser profile. Keep secrets out of page-visible state and model context.
+- Disable downloads by default. If required, cap size/time, restrict destination paths, verify file type and sandbox parsing. Do not execute downloaded files or enable remote browser debugging on public interfaces.
+- Treat login, purchase, upload, deletion and other state-changing actions as separate authorized operations, not incidental scraping steps.
+- Bound navigation depth, URLs, bytes, execution time and retries. A page can generate an endless crawl without issuing any obvious malicious instruction.
+
+See [repair-and-coverage.md](repair-and-coverage.md) for repair handoffs, worker outcomes, requested-date acceptance and historical completeness. See [documents.md](documents.md) for untrusted document processing.
 
 ## 11. Cost and rate (the second alarm)
 
@@ -162,7 +192,7 @@ Run a sitemap parse separately from your crawl. Disagreement is an early signal 
 
 ## 12. Red flags
 
-- A run that returns 200s and zero rows. **Pages you, do not flow downstream.**
+- A run that returns 200s and unexpected zero rows. **Hold downstream promotion and investigate; alert according to impact.** A verified genuinely empty interval is valid output, not automatically an incident.
 - A run that returns 200s and 10% of yesterday's count on the same schema. Same.
 - A run that returns 200s with a `text/markdown` content-type on a target whose other pages ship HTML. Same.
 - A self-healing loop that has retried the same field three times in a single run. **Stop the run; the loop is now in a recovery cycle that is making things worse.** Page a human.
