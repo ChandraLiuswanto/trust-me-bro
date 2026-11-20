@@ -30,7 +30,8 @@ When you initialize `update_plan` after approval, start each step's goal with th
 
 **Hard rules (the files give the full procedure):**
 
-- Nothing is created before the exact `lgtm`/`LGTM` reply (section 1).
+- Before the exact `lgtm`/`LGTM` reply, the only thing created is the uncommitted spec file in the current checkout (section 1).
+- The spec's `Status:` line and `## Status History` stay current at every transition (section 1).
 - Workers: Pi on `fedora/` models only, via `worker-start --agent pi --model fedora/<m> --effort <e>` (Orca owns and releases them). Never `terminal create` + `worker-start --terminal`: those workers are never released and linger as dead `retained`/`unverifiable` entries.
 - Never replace a worker without a confirmed `worker-stop`; silence is not a stopReason; never poll. Reviewers are never replaced.
 - Every bead carries this run's unique label; never `bd init` on an error other than "No active beads workspace found"; done means every labelled bead is `closed` (`bd list -l "$L" --all -n 0 --json`).
@@ -67,12 +68,34 @@ Running `git switch -c` inside the default-branch checkout does not meet this ru
 
 **REQUIRED SUB-SKILL: superpowers:brainstorming.** Follow its checklist through refinement and self-review, with requirements, success criteria and edge cases. Brainstorming supplies the spec review; do not add independent spec-hardening reviewers.
 
-**Nothing is created before approval.** Show the full spec in chat and ask for approval there. Until the gate opens, the only state you change is `update_plan`: no files (not even `.scratch`), no git-exclude edits, no commits, branches, worktrees, beads, terminals or workers. This overrides brainstorming's "write the spec to `docs/superpowers/specs/` and commit it" step and the Pipeline Worktree ordering: the spec file is written only after approval.
+**Only the spec file is created before approval.** Write it in the current checkout (usually `main`/`master`) at `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, leave it **uncommitted**, show the full spec in chat and ask for approval there. Until the gate opens, the only other state you change is `update_plan`: no other files (not even `.scratch`), no git-exclude edits, no `git add`, commits, branches, worktrees, beads, terminals or workers. This overrides brainstorming's "commit the spec" step: the commit happens only after approval, in the pipeline worktree.
+
+**Spec status header.** The spec starts with a status line directly under its title and ends with a history section. Timestamps come from `date '+%Y-%m-%d %H:%M %Z'`; never invent them.
+
+```markdown
+# <Topic> Design
+
+**Status:** Waiting approval (since 2025-06-01 14:05 WIB)
+
+...spec body...
+
+## Status History
+
+- 2025-06-01 13:40 WIB: Draft
+- 2025-06-01 14:05 WIB: Waiting approval
+```
+
+Statuses: `Draft` → `Waiting approval` → `Approved` → `Done`, plus `Blocked: <reason>` at any point. On every transition, rewrite the `Status:` line (with the new time) and append one history line; never edit or delete earlier history lines. Transitions:
+
+- First presented in chat: `Waiting approval`. Feedback instead of `lgtm`: append `Revised: <one-line change>`, then `Waiting approval` again when re-presented.
+- Exact `lgtm`: `Approved` (after-approval step 2).
+- Stopping for a blocker (below, or a review blocker): `Blocked: <reason>`; when work resumes, append `Unblocked` and restore the previous status. Commit these updates in the pipeline worktree.
+- Final review passed and the integration menu is about to be shown: `Done` (section 5), committed.
 
 | Excuse | Reality |
 |---|---|
-| "Brainstorming requires a committed spec for the user to review" | Here the user reviews the spec in chat. The file comes after approval. |
-| "Writing the spec in a worktree is not building" | A worktree, branch or commit before approval is work done ahead of the gate. |
+| "Brainstorming requires a committed spec for the user to review" | The spec file exists for review, uncommitted. The commit comes after approval. |
+| "Writing the spec in a worktree is not building" | A worktree, branch or commit before approval is work done ahead of the gate. Pre-approval, the spec lives only in the current checkout. |
 | "The user said get everything ready while they're away" | Ready means the spec in chat. The gate opens only on the approval reply. |
 
 **The gate** opens only when the **entire trimmed reply** to the latest presented spec is exactly **`lgtm`** or **`LGTM`**. Anything else is feedback: other spellings (“Lgtm”), “approved”, “looks good”, “no cap”, “not lgtm”, “lgtm but rename X”, “Lgtm, ship it”. Address it, re-present the spec, and say that a reply of exactly `lgtm` starts the run. A keyword in the initial request pre-approves nothing.
@@ -80,7 +103,7 @@ Running `git switch -c` inside the default-branch checkout does not meet this ru
 **After approval**, in order:
 
 1. Pick the pipeline worktree (Pipeline Worktree above). Then name the Orca run: `orca orchestration run-create --objective "gg: <topic>" --json`; record its run ID in plan decisions. Later `worker-start` calls join this bound run; otherwise Orca names it after the first task (e.g. "Plan review").
-2. Write the spec to `<P>/docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit it there. The implementation plan is a separate later file.
+2. If P is not the current checkout, `mv` the uncommitted spec into `<P>/docs/superpowers/specs/` (same filename) so the user's checkout is left clean. Set status `Approved` (section 1 header rules) and commit the spec in P. The implementation plan is a separate later file.
 3. Show the remaining stages once and say: “No further human approval gates before integration; blockers still stop execution.”
 
 Then initialize the complete active `update_plan`; keep one step in progress and record concise evidence at phase/bead boundaries. Run without plan approval, breakdown confirmation or progress check-ins. Stop only for an unresolvable blocker, genuine spec ambiguity, unavailable required capabilities, or the review blockers below. This autonomy does **not** authorize integration.
@@ -90,6 +113,8 @@ Then initialize the complete active `update_plan`; keep one step in progress and
 Before presenting integration options, run `orca orchestration worker-list --json` and `worker-release --dispatch <id> --json` any roster worker still listed open (kept-open advisors, or one whose automatic release has not happened yet). Never close your own `$ORCA_TERMINAL_HANDLE`. Record the releases in plan progress. Leftover `retained`/`unverifiable` rows from workers launched in self-created terminals are cosmetic and covered in `pi-agents` (never run `orchestration reset` unprompted).
 
 **Cleanup after integration** (when the user asks): close only finished beads, by explicit ID; leave open or blocked ones open. Remove the pipeline worktree and its merged local branch together with `orca worktree rm --worktree path:<P> --delete-branch --json` (from outside P). If the result shows the branch kept, try `git -C <source checkout> branch -d gg/<topic>`; `-d` refuses unmerged work, so if it refuses too, keep the branch and tell the user. Never force-delete with `git branch -D`. A remote branch is deleted only on the user's explicit request.
+
+Before the summary, set the spec status to `Done` and commit it in P.
 
 Give a concise summary of commits, tests and results, review outcomes/rounds, unresolved findings and blockers. Mention relevant routing substitutions or limitations. No fixed report template is required; do not hide failures behind a success summary.
 
