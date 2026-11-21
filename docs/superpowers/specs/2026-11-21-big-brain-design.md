@@ -81,7 +81,7 @@ into the updater child).
 - `state.json`: `{ [sessionFile]: { marker, failures, status } }`. `marker` is the last digested entry id, and
   `status` is one of `active | done | skipped`. Only the supervisor writes it, under the lock, followed by an atomic
   rename.
-- `lock` (supervisor pid; broken when that pid is dead), `log` (one line per failure), `runs/<id>/` (staging, removed
+- `lock` (held with `flock(1)` for the whole run; the kernel frees it when the holder dies, and the file is never deleted), `log` (one line per failure), `runs/<id>/` (staging, removed
   after each run).
 
 The wiki dirs hold only `index.md` and pages, plus the global wiki's own `.git`.
@@ -136,7 +136,7 @@ parent.
        preflight accepts because the live content already matches.
      - Either way, add 1 to `failures`, write one `log` line, and stop. After 3 failures the session becomes `skipped`.
 5. On `final: true` with nothing left, set `status: done`.
-6. Remove `runs/<id>/` and release the lock.
+6. Remove `runs/<id>/`; the lock is released when the process exits.
 
 shortcut: if apply fails or the supervisor dies mid-publish, a chunk can be half-published until the next run redoes
 it. Each page stays whole, since every write is a rename. Upgrade to a publish journal if this is ever seen.
@@ -269,7 +269,7 @@ failed chunk (step 4 of "Supervisor run").
 - Opt-in: a repo without `.pi/wiki/` gets no project pages and the dir is not created; the global wiki still updates.
 - Worktree: a session in a linked worktree resolves to the main checkout's `.pi/wiki/`.
 - `tests/big-brain.test.ts`, in the same style as `tests/agent-forum.test.ts`, covering `lib/big-brain.ts`: transcript condensing and
-  capping, marker slicing, secret scan, lock acquire/stale-break, citation format.
+  capping, marker slicing, secret scan, lock held by another process (quiet no-op) and freed by a killed holder, citation format.
 - Manual end-to-end: run a short session in a scratch git repo, quit, confirm the child ran, the pages and index were
   written with citations, the global wiki committed, the project wiki left uncommitted, and the next session's system
   prompt contains the indexes.
