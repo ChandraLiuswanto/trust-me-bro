@@ -1,6 +1,6 @@
 # big-brain init: cold-start a project wiki from past sessions
 
-**Status:** Approved (since 2026-11-21 22:40 WIB)
+**Status:** Done (since 2026-11-21 22:48 WIB)
 
 ## Problem
 
@@ -102,3 +102,4 @@ wait for the next catch-up in that project. The notify says so when that happens
 
 - 2026-11-21 22:39 WIB: Waiting approval
 - 2026-11-21 22:40 WIB: Approved
+- 2026-11-21 22:48 WIB: Done
