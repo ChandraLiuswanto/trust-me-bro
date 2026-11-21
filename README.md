@@ -109,6 +109,23 @@ in `~/.pi/agent/settings.json`:
 
 Check isolation with `bash tests/host-skills.sh --assert`.
 
+### Big brain
+
+A background updater on a cheap model digests your interactive sessions into
+two small markdown wikis. Every session then gets both indexes injected under
+`## Memory wiki` and reads pages on demand. Workers, print-mode runs and the
+updater itself are never digested.
+
+- Global wiki: `~/.pi/agent/wiki/`, private, its own git repo, auto-committed.
+- Project wiki: `<main checkout>/.pi/wiki/`, shared through git, never
+  committed by the updater. Opt a repo in with `mkdir .pi/wiki`.
+- `PI_BIG_BRAIN=off` turns it off for a process (scheduled jobs set it).
+- `bigBrain.model` in `~/.pi/agent/settings.json` picks the model
+  (default `fedora/memory-generate`).
+
+Design: `docs/superpowers/specs/2026-11-21-big-brain-design.md`. Run the tests
+with `node --test tests/*.test.ts`.
+
 ## Requires
 
 - [Pi](https://pi.dev) with [SoL-Pi](https://github.com/NVlabs/SoL-Pi)
