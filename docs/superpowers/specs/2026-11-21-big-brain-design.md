@@ -1,5 +1,7 @@
 # big-brain: Pi wiki memory
 
+**Status:** Approved (since 2026-11-21 21:29 WIB)
+
 `big-brain` is only the name of the extension (code, setting `bigBrain.model`, env `PI_BIG_BRAIN`, commit prefix).
 On disk it is a plain wiki: `~/.pi/agent/wiki/` and `<repo>/.pi/wiki/`.
 
@@ -283,3 +285,8 @@ failed chunk (step 4 of "Supervisor run").
 - Writing into bd.
 - Digesting every N turns or on idle.
 - Installing pi-memory, pi-blackhole or similar packages.
+
+## Status History
+
+- 2026-11-21 19:00 WIB: Waiting approval (reconstructed; header added at approval)
+- 2026-11-21 21:29 WIB: Approved
