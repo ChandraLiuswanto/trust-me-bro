@@ -220,6 +220,27 @@ test("lock held by a live pid → no work; stale lock is broken", async () => {
   assert.ok(!existsSync(join(stateDir(t.home), "lock")));
 });
 
+test("empty lock file is held, not stale", async () => {
+  const t = await setup();
+  await mkdir(stateDir(t.home), { recursive: true });
+  await writeFile(join(stateDir(t.home), "lock"), "");
+  await t.run();
+  assert.equal(t.calls.length, 0);
+  assert.equal(await readFile(join(stateDir(t.home), "lock"), "utf8"), "");
+});
+
+test("lock replaced mid-run → nothing published, other lock kept", async () => {
+  const t = await setup();
+  const lock = join(stateDir(t.home), "lock");
+  await assert.rejects(t.run(async (p, roots) => {
+    await writeFile(lock, "1");
+    return writePages(G)(p, roots);
+  }), /lost lock/);
+  assert.ok(!existsSync(join(t.gw, "lesson-a.md")));
+  assert.deepEqual(await t.state(), {});
+  assert.equal(await readFile(lock, "utf8"), "1");
+});
+
 test("catch-up skips live pid, unregistered, done and skipped sessions", async () => {
   const t = await setup({ pid: process.pid });
   const catchup = (child?: Child) => t.run(child, "--mode", "catchup", "--project", t.root);
