@@ -218,3 +218,9 @@ export async function writeAtomic(path: string, data: string): Promise<void> {
   await writeFile(tmp, data);
   await rename(tmp, path);
 }
+
+export type Candidate = { sessionFile: string; users: number; mtimeMs: number; calls: number };
+
+export function rankInit(c: Candidate[], n: number): Candidate[] {
+  return [...c].sort((a, b) => b.users - a.users || b.mtimeMs - a.mtimeMs).slice(0, n);
+}

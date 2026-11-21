@@ -24,6 +24,7 @@ import {
   injectBlock,
   regFile,
   writeAtomic,
+  rankInit,
   type Entry,
 } from "../lib/big-brain.ts";
 
@@ -195,4 +196,10 @@ test("writeAtomic leaves no tmp file", async () => {
   await writeAtomic(p, "two");
   assert.equal(await readFile(p, "utf8"), "two");
   assert.deepEqual(await readdir(join(dir, "atomic", "deep")), ["s.json"]);
+});
+
+test("rankInit orders by users, then newest, and cuts at n", () => {
+  const c = (sessionFile: string, users: number, mtimeMs: number) => ({ sessionFile, users, mtimeMs, calls: 1 });
+  const ranked = rankInit([c("a", 2, 1), c("b", 5, 1), c("c", 2, 9), c("d", 3, 1)], 3);
+  assert.deepEqual(ranked.map((r) => r.sessionFile), ["b", "d", "c"]);
 });
