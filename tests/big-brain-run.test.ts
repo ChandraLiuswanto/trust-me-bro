@@ -236,6 +236,16 @@ async function cli(t: { home: string; sessionFile: string; root: string }) {
   return spawnSync(process.execPath, [RUNNER, "--mode", "session", "--session", t.sessionFile, "--project", t.root], { env, encoding: "utf8" });
 }
 
+test("CLI: locked supervisor does not leak the lock marker to children", async () => {
+  const t = await setup();
+  const bin = join(t.home, "bin");
+  await mkdir(bin, { recursive: true });
+  await writeFile(join(bin, "git"), '#!/bin/sh\nprintf "%s" "${BIG_BRAIN_LOCKED-}" > "$HOME/child-lock-marker"\n', { mode: 0o755 });
+  const r = await cli(t);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(await readFile(join(t.home, "child-lock-marker"), "utf8"), "");
+});
+
 // one process holds the flock fd (exec keeps it), so SIGKILL on that pid frees it
 async function holdLock(home: string) {
   await mkdir(stateDir(home), { recursive: true });

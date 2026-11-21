@@ -286,6 +286,7 @@ const log = (msg: string) => appendFile(join(stateDir(), "log"), `${new Date().t
 if (import.meta.main) {
   const argv = process.argv.slice(2);
   if (process.env.BIG_BRAIN_LOCKED === "1") {
+    delete process.env.BIG_BRAIN_LOCKED;
     main(argv, realDeps).catch((e) => log((e as Error).message));
   } else {
     // kernel lock: freed when the holder dies, so nothing stale is ever broken; the lock file is never unlinked
