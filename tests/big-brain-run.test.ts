@@ -1,11 +1,12 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { globalWiki, projectWiki, regFile, stateDir, writeAtomic, type State } from "../lib/big-brain.ts";
 import { main, preflightAndApply, type Deps } from "../lib/big-brain-run.ts";
 
@@ -13,6 +14,7 @@ const dir = await mkdtemp(join(tmpdir(), "big-brain-run-"));
 after(() => rm(dir, { recursive: true, force: true }));
 
 const DEAD = 999_999_999;
+const RUNNER = fileURLToPath(new URL("../lib/big-brain-run.ts", import.meta.url));
 let n = 0;
 type Child = (prompt: string, roots: string[]) => Promise<number> | number;
 
@@ -81,7 +83,6 @@ test("happy path publishes and commits once", async () => {
   assert.equal((await t.state())[t.sessionFile].marker, "a1");
   assert.equal((await t.state())[t.sessionFile].status, "active");
   assert.deepEqual(await readdir(join(stateDir(t.home), "runs")), []);
-  assert.ok(!existsSync(join(stateDir(t.home), "lock")));
 });
 
 test("fresh empty global wiki, child writes nothing → no commit, marker advanced", async () => {
@@ -225,37 +226,47 @@ test("three chunks, chunk 2 fails → marker at chunk 1, next run sends 2 and 3"
   assert.equal((await t.state())[t.sessionFile].marker, "a2");
 });
 
-test("lock held by a live pid → no work; stale lock is broken", async () => {
+// real CLI under a temp HOME; a fake `pi` exits 0 so an unlocked run digests without a model
+async function cli(t: { home: string; sessionFile: string; root: string }) {
+  const bin = join(t.home, "bin");
+  await mkdir(bin, { recursive: true });
+  await writeFile(join(bin, "pi"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const env = { ...process.env, NODE_NO_WARNINGS: "1", HOME: t.home, PATH: `${bin}:${process.env.PATH}` };
+  delete env.BIG_BRAIN_LOCKED;
+  return spawnSync(process.execPath, [RUNNER, "--mode", "session", "--session", t.sessionFile, "--project", t.root], { env, encoding: "utf8" });
+}
+
+// one process holds the flock fd (exec keeps it), so SIGKILL on that pid frees it
+async function holdLock(home: string) {
+  await mkdir(stateDir(home), { recursive: true });
+  const h = spawn("sh", ["-c", 'exec 9>>"$1"; flock -n 9 || exit 1; echo ready; exec sleep 30', "sh", join(stateDir(home), "lock")]);
+  await new Promise((ok, no) => { h.stdout.once("data", ok); h.once("exit", no); });
+  return h;
+}
+
+test("CLI: lock held by another process → no work, quiet exit", async () => {
   const t = await setup();
-  await mkdir(stateDir(t.home), { recursive: true });
-  await writeFile(join(stateDir(t.home), "lock"), String(process.pid));
-  await t.run();
-  assert.equal(t.calls.length, 0);
-  await writeFile(join(stateDir(t.home), "lock"), String(DEAD));
-  await t.run();
-  assert.equal(t.calls.length, 1);
-  assert.ok(!existsSync(join(stateDir(t.home), "lock")));
+  const h = await holdLock(t.home);
+  try {
+    const r = await cli(t);
+    assert.equal(r.status, 75);
+    assert.equal(r.stdout + r.stderr, "");
+    assert.deepEqual(await t.state(), {});
+    assert.ok(!existsSync(join(stateDir(t.home), "log")));
+  } finally {
+    h.kill("SIGKILL");
+  }
 });
 
-test("empty lock file is held, not stale", async () => {
+test("CLI: SIGKILLed holder frees the lock; next run proceeds and the lock file stays", async () => {
   const t = await setup();
-  await mkdir(stateDir(t.home), { recursive: true });
-  await writeFile(join(stateDir(t.home), "lock"), "");
-  await t.run();
-  assert.equal(t.calls.length, 0);
-  assert.equal(await readFile(join(stateDir(t.home), "lock"), "utf8"), "");
-});
-
-test("lock replaced mid-run → nothing published, other lock kept", async () => {
-  const t = await setup();
-  const lock = join(stateDir(t.home), "lock");
-  await assert.rejects(t.run(async (p, roots) => {
-    await writeFile(lock, "1");
-    return writePages(G)(p, roots);
-  }), /lost lock/);
-  assert.ok(!existsSync(join(t.gw, "lesson-a.md")));
-  assert.deepEqual(await t.state(), {});
-  assert.equal(await readFile(lock, "utf8"), "1");
+  const h = await holdLock(t.home);
+  h.kill("SIGKILL");
+  await new Promise((ok) => h.once("exit", ok));
+  const r = await cli(t);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal((await t.state())[t.sessionFile].marker, "a1");
+  assert.ok(existsSync(join(stateDir(t.home), "lock")));
 });
 
 test("catch-up skips live pid, unregistered, done and skipped sessions", async () => {

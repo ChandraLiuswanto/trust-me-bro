@@ -1,4 +1,4 @@
-import { appendFile, copyFile, link, mkdir, readdir, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
+import { appendFile, copyFile, mkdir, readdir, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { execFile, spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
@@ -46,30 +46,6 @@ const readOr = (p: string) => readFile(p, "utf8").catch(() => null);
 async function mdFiles(dir: string): Promise<string[]> {
   const ents = await readdir(dir, { withFileTypes: true }).catch(() => []);
   return ents.filter((d) => d.isFile() && d.name.endsWith(".md")).map((d) => d.name);
-}
-
-// shortcut: breaking a stale lock is not fully atomic (two breakers can race); holdsLock before publish and each state save bounds it, upgrade to flock if it bites
-async function takeLock(path: string, pidAlive: (pid: number) => boolean): Promise<boolean> {
-  for (let i = 0; i < 2; i++) {
-    const tmp = `${path}.${process.pid}.${randomBytes(4).toString("hex")}`;
-    await writeFile(tmp, String(process.pid));
-    try {
-      await link(tmp, path);
-      return true;
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
-    } finally {
-      await unlink(tmp).catch(() => {});
-    }
-    const pid = Number((await readOr(path))?.trim() || NaN);
-    if (!(pid > 0) || pidAlive(pid)) return false;
-    await unlink(path).catch(() => {});
-  }
-  return false;
-}
-
-async function holdsLock(sd: string): Promise<void> {
-  if ((await readOr(join(sd, "lock"))) !== String(process.pid)) throw new Error("lost lock");
 }
 
 async function stage(live: string, staged: string): Promise<Map<string, string>> {
@@ -186,7 +162,6 @@ async function runChunk(deps: Deps, sd: string, reg: Reg, cite: string, c: Chunk
       const err = validateWiki(p.staged, i === 0 ? "global" : "project", A);
       if (err) throw new Error(`validation: ${err}`);
     }
-    await holdsLock(sd);
     const changed = await preflightAndApply(pairs);
     if (changed === "conflict") throw new Error("conflict: live wiki edited during run");
     const files = changed[0];
@@ -219,7 +194,6 @@ async function digest(deps: Deps, sd: string, reg: Reg, final: boolean, save: (s
       s = { ...s, marker: c.lastId };
       await save(s);
     } catch (e) {
-      if ((e as Error).message === "lost lock") throw e;
       const failures = s.failures + 1;
       await appendFile(join(sd, "log"), `${deps.now().toISOString()} ${reg.sessionFile} ${(e as Error).message}\n`);
       await save({ ...s, failures, status: failures >= MAX_FAILURES ? "skipped" : s.status });
@@ -229,6 +203,7 @@ async function digest(deps: Deps, sd: string, reg: Reg, final: boolean, save: (s
   await save({ ...s, marker: end, failures: 0, status: final ? "done" : s.status });
 }
 
+// the transaction body; the CLI entry below runs it only while holding the flock on <stateDir>/lock
 export async function main(argv: string[], deps: Deps): Promise<void> {
   const { values: a } = parseArgs({
     args: argv,
@@ -236,42 +211,35 @@ export async function main(argv: string[], deps: Deps): Promise<void> {
   });
   const sd = stateDir(deps.home);
   await mkdir(sd, { recursive: true });
-  const lock = join(sd, "lock");
-  if (!(await takeLock(lock, deps.pidAlive))) return;
-  try {
-    const gw = globalWiki(deps.home);
-    if (!existsSync(join(gw, ".git"))) {
-      await mkdir(gw, { recursive: true });
-      await exec("git", ["init", "-q"], { cwd: gw });
+  const gw = globalWiki(deps.home);
+  if (!existsSync(join(gw, ".git"))) {
+    await mkdir(gw, { recursive: true });
+    await exec("git", ["init", "-q"], { cwd: gw });
+  }
+  const regs: Reg[] = [];
+  for (const f of await readdir(join(sd, "sessions")).catch(() => [] as string[])) {
+    try {
+      regs.push(JSON.parse((await readFile(join(sd, "sessions", f), "utf8"))));
+    } catch {
+      // skip unreadable record
     }
-    const regs: Reg[] = [];
-    for (const f of await readdir(join(sd, "sessions")).catch(() => [] as string[])) {
-      try {
-        regs.push(JSON.parse((await readFile(join(sd, "sessions", f), "utf8"))));
-      } catch {
-        // skip unreadable record
-      }
-    }
-    const statePath = join(sd, "state.json");
-    const loadState = async (): Promise<State> => JSON.parse((await readOr(statePath)) || "{}");
-    const state = await loadState().catch(() => ({}) as State);
-    const get = (f: string): SessState => state[f] ?? { marker: null, failures: 0, status: "active" };
-    const picked =
-      a.mode === "session"
-        ? regs.filter((r) => r.sessionFile === a.session && get(r.sessionFile).status !== "skipped")
-        : regs.filter((r) =>
-            r.projectRoot === (a.project ?? null) && !deps.pidAlive(r.pid) && !["done", "skipped"].includes(get(r.sessionFile).status));
-    for (const reg of picked) {
-      const save = async (s: SessState) => {
-        await holdsLock(sd);
-        const cur = await loadState().catch(() => ({}) as State);
-        cur[reg.sessionFile] = s;
-        await writeAtomic(statePath, JSON.stringify(cur, null, 2));
-      };
-      await digest(deps, sd, reg, a.mode === "session" && !!a.final, save, get(reg.sessionFile));
-    }
-  } finally {
-    if ((await readOr(lock)) === String(process.pid)) await unlink(lock).catch(() => {});
+  }
+  const statePath = join(sd, "state.json");
+  const loadState = async (): Promise<State> => JSON.parse((await readOr(statePath)) || "{}");
+  const state = await loadState().catch(() => ({}) as State);
+  const get = (f: string): SessState => state[f] ?? { marker: null, failures: 0, status: "active" };
+  const picked =
+    a.mode === "session"
+      ? regs.filter((r) => r.sessionFile === a.session && get(r.sessionFile).status !== "skipped")
+      : regs.filter((r) =>
+          r.projectRoot === (a.project ?? null) && !deps.pidAlive(r.pid) && !["done", "skipped"].includes(get(r.sessionFile).status));
+  for (const reg of picked) {
+    const save = async (s: SessState) => {
+      const cur = await loadState().catch(() => ({}) as State);
+      cur[reg.sessionFile] = s;
+      await writeAtomic(statePath, JSON.stringify(cur, null, 2));
+    };
+    await digest(deps, sd, reg, a.mode === "session" && !!a.final, save, get(reg.sessionFile));
   }
 }
 
@@ -313,7 +281,19 @@ const realDeps: Deps = {
   },
 };
 
+const log = (msg: string) => appendFile(join(stateDir(), "log"), `${new Date().toISOString()} supervisor ${msg}\n`).catch(() => {});
+
 if (import.meta.main) {
-  main(process.argv.slice(2), realDeps).catch((e) =>
-    appendFile(join(stateDir(), "log"), `${new Date().toISOString()} supervisor ${(e as Error).message}\n`).catch(() => {}));
+  const argv = process.argv.slice(2);
+  if (process.env.BIG_BRAIN_LOCKED === "1") {
+    main(argv, realDeps).catch((e) => log((e as Error).message));
+  } else {
+    // kernel lock: freed when the holder dies, so nothing stale is ever broken; the lock file is never unlinked
+    // (a waiter would lock a deleted inode). Exit 75 = held by another run, a quiet no-op.
+    await mkdir(stateDir(), { recursive: true });
+    const child = spawn("flock", ["-n", "-E", "75", join(stateDir(), "lock"), process.execPath, fileURLToPath(import.meta.url), ...argv],
+      { env: { ...process.env, BIG_BRAIN_LOCKED: "1" }, stdio: "inherit" });
+    child.on("error", (e) => log(`flock unavailable, not running: ${e.message}`)); // fail closed
+    child.on("close", (code) => { process.exitCode = code ?? 1; });
+  }
 }
