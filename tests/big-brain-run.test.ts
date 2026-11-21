@@ -93,6 +93,23 @@ test("fresh empty global wiki, child writes nothing → no commit, marker advanc
   assert.ok(!existsSync(join(stateDir(t.home), "log")));
 });
 
+test("global commit holds only the pages the run changed", async () => {
+  const t = await setup();
+  await mkdir(t.gw, { recursive: true });
+  execFileSync("git", ["init", "-q"], { cwd: t.gw });
+  const g = (...a: string[]) => execFileSync("git", ["-c", "user.name=u", "-c", "user.email=u@x", ...a], { cwd: t.gw, encoding: "utf8" });
+  await writeFile(join(t.gw, "lesson-b.md"), "b\n");
+  g("add", "lesson-b.md");
+  g("commit", "-q", "-m", "init");
+  await writeFile(join(t.gw, "secret.txt"), "sk-ant-abcdefghijklmnopqrstu");
+  await writeFile(join(t.gw, "lesson-b.md"), "user edit\n");
+  g("add", "lesson-b.md");
+  await t.run(writePages({ "index.md": "- [lesson-a](lesson-a.md): a\n- [lesson-b](lesson-b.md): b\n", "lesson-a.md": "fact\n" }));
+  assert.deepEqual(g("show", "--name-only", "--format=", "HEAD").trim().split("\n").sort(), ["index.md", "lesson-a.md"]);
+  assert.equal(g("diff", "--cached", "--name-only").trim(), "lesson-b.md");
+  assert.match(g("status", "--porcelain"), /\?\? secret.txt/);
+});
+
 test("final digest → done", async () => {
   const t = await setup();
   await t.run(undefined, "--mode", "session", "--session", t.sessionFile, "--project", t.root, "--final");
@@ -171,7 +188,7 @@ test("retry after a partial apply succeeds; preflight conflicts write nothing", 
   await writeFile(join(staged, "b.md"), "new b");
   // first attempt died after a.md was renamed in
   await writeFile(join(live, "a.md"), "new a");
-  assert.equal(await preflightAndApply([{ staged, live, hashes }]), "ok");
+  assert.deepEqual(await preflightAndApply([{ staged, live, hashes }]), [["b.md"]]);
   assert.equal(await readFile(join(live, "b.md"), "utf8"), "new b");
   assert.deepEqual((await readdir(live)).sort(), ["a.md", "b.md"]);
   // a hand edit in the second pair blocks the first pair too

@@ -84,7 +84,8 @@ async function stage(live: string, staged: string): Promise<Map<string, string>>
 
 // shortcut: if apply fails or the supervisor dies mid-publish, a chunk can be half-published until the next run redoes
 // it. Each page stays whole, since every write is a rename. Upgrade to a publish journal if this is ever seen.
-export async function preflightAndApply(pairs: WikiPair[]): Promise<"ok" | "conflict"> {
+// returns, per pair, the filenames written or deleted
+export async function preflightAndApply(pairs: WikiPair[]): Promise<string[][] | "conflict"> {
   const plans: { live: string; writes: [string, string][]; deletes: string[] }[] = [];
   for (const { staged, live, hashes } of pairs) {
     const names = await mdFiles(staged);
@@ -114,7 +115,7 @@ export async function preflightAndApply(pairs: WikiPair[]): Promise<"ok" | "conf
     }
     for (const f of deletes) await unlink(join(live, f));
   }
-  return "ok";
+  return plans.map((p) => [...p.writes.map(([f]) => f), ...p.deletes]);
 }
 
 function buildPrompt(o: {
@@ -186,14 +187,15 @@ async function runChunk(deps: Deps, sd: string, reg: Reg, cite: string, c: Chunk
       if (err) throw new Error(`validation: ${err}`);
     }
     await holdsLock(sd);
-    if ((await preflightAndApply(pairs)) === "conflict") throw new Error("conflict: live wiki edited during run");
-    await exec("git", ["add", "-A", "--", "."], { cwd: gLive });
-    const staged = await exec("git", ["diff", "--cached", "--quiet"], { cwd: gLive }).then(() => false, (e) => {
-      if (e.code === 1) return true;
-      throw e;
-    });
-    if (staged)
-      await exec("git", ["-c", "user.name=big-brain", "-c", "user.email=big-brain@localhost", "commit", "-q", "-m", `big brain: ${cite}`], { cwd: gLive });
+    const changed = await preflightAndApply(pairs);
+    if (changed === "conflict") throw new Error("conflict: live wiki edited during run");
+    const files = changed[0];
+    if (files.length) {
+      // pathspec add/commit: never sweep in stray files or the user's own staged edits
+      // shortcut: a page published before a git failure stays uncommitted until a later run changes it, upgrade with the publish journal
+      await exec("git", ["add", "-A", "--", ...files], { cwd: gLive });
+      await exec("git", ["-c", "user.name=big-brain", "-c", "user.email=big-brain@localhost", "commit", "-q", "-m", `big brain: ${cite}`, "--", ...files], { cwd: gLive });
+    }
   } finally {
     await rm(run, { recursive: true, force: true });
   }
