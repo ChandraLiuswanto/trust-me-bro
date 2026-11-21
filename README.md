@@ -119,6 +119,10 @@ updater itself are never digested.
 - Global wiki: `~/.pi/agent/wiki/`, private, its own git repo, auto-committed.
 - Project wiki: `<main checkout>/.pi/wiki/`, shared through git, never
   committed by the updater. Opt a repo in with `mkdir .pi/wiki`.
+- `/big-brain-init [N] [days]` backfills the current project: it registers the
+  top N past sessions (default 20) from the last `days` (default 30), ranked by
+  your message count, creates `.pi/wiki`, and digests them in the background.
+  Cancel with `pkill -f big-brain-run`; it resumes later.
 - `PI_BIG_BRAIN=off` turns it off for a process (scheduled jobs set it).
 - `bigBrain.model` in `~/.pi/agent/settings.json` picks the model
   (default `fedora/memory-generate`).
