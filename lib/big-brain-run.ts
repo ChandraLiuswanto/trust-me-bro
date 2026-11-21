@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { execFile, spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, promisify } from "node:util";
 import {
@@ -232,7 +232,8 @@ export async function main(argv: string[], deps: Deps): Promise<void> {
     a.mode === "session"
       ? regs.filter((r) => r.sessionFile === a.session && get(r.sessionFile).status !== "skipped")
       : regs.filter((r) =>
-          r.projectRoot === (a.project ?? null) && !deps.pidAlive(r.pid) && !["done", "skipped"].includes(get(r.sessionFile).status));
+          r.projectRoot === (a.project ?? null) && !deps.pidAlive(r.pid) && !["done", "skipped"].includes(get(r.sessionFile).status))
+          .sort((x, y) => basename(x.sessionFile).localeCompare(basename(y.sessionFile))); // ISO-timestamp names: oldest first
   for (const reg of picked) {
     const save = async (s: SessState) => {
       const cur = await loadState().catch(() => ({}) as State);
@@ -248,6 +249,16 @@ async function model(home: string): Promise<string> {
     return JSON.parse(await readFile(join(home, ".pi", "agent", "settings.json"), "utf8")).bigBrain?.model || "fedora/memory-generate";
   } catch {
     return "fedora/memory-generate";
+  }
+}
+
+export function pidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false; // pid 0 would signal our own process group
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
   }
 }
 
@@ -271,14 +282,7 @@ const realDeps: Deps = {
     return exec("bd", ["memories"], { cwd: root }).then((r) => r.stdout, () => "");
   },
   now: () => new Date(),
-  pidAlive(pid) {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch (e) {
-      return (e as NodeJS.ErrnoException).code === "EPERM";
-    }
-  },
+  pidAlive,
 };
 
 const log = (msg: string) => appendFile(join(stateDir(), "log"), `${new Date().toISOString()} supervisor ${msg}\n`).catch(() => {});

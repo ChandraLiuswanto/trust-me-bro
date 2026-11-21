@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { globalWiki, projectWiki, regFile, stateDir, writeAtomic, type State } from "../lib/big-brain.ts";
-import { main, preflightAndApply, type Deps } from "../lib/big-brain-run.ts";
+import { main, pidAlive, preflightAndApply, type Deps } from "../lib/big-brain-run.ts";
 
 const dir = await mkdtemp(join(tmpdir(), "big-brain-run-"));
 after(() => rm(dir, { recursive: true, force: true }));
@@ -347,4 +347,23 @@ test("project wiki not created when .pi/wiki is absent; global still updates", a
   assert.ok(!existsSync(t.pw));
   assert.ok(existsSync(join(t.gw, "lesson-a.md")));
   assert.equal(t.commits().length, 1);
+});
+
+test("pidAlive: pid <= 0 is dead", () => {
+  assert.equal(pidAlive(0), false);
+  assert.equal(pidAlive(-1), false);
+  assert.equal(pidAlive(process.pid), true);
+});
+
+test("catch-up digests oldest first and picks pid 0 with the real pidAlive", async () => {
+  const t = await setup();
+  const base = await readFile(t.sessionFile, "utf8");
+  for (const name of ["2026-01-02T00-00-00_b.jsonl", "2026-01-01T00-00-00_a.jsonl"]) {
+    const f = join(t.home, name);
+    await writeFile(f, base.replaceAll("msg ", `${name} `));
+    await writeAtomic(regFile(t.home, f), JSON.stringify({ sessionFile: f, projectRoot: t.root, pid: 0 }));
+  }
+  await main(["--mode", "catchup", "--project", t.root], { ...t.deps(), pidAlive });
+  const order = t.calls.map((c) => /2026-01-0\dT\S+_[ab]/.exec(c.prompt)?.[0]).filter(Boolean);
+  assert.deepEqual(order.slice(0, 2), ["2026-01-01T00-00-00_a", "2026-01-02T00-00-00_b"]);
 });
