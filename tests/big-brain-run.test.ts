@@ -1,0 +1,279 @@
+import { test, after } from "node:test";
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { globalWiki, projectWiki, regFile, stateDir, writeAtomic, type State } from "../lib/big-brain.ts";
+import { main, preflightAndApply, type Deps } from "../lib/big-brain-run.ts";
+
+const dir = await mkdtemp(join(tmpdir(), "big-brain-run-"));
+after(() => rm(dir, { recursive: true, force: true }));
+
+const DEAD = 999_999_999;
+let n = 0;
+type Child = (prompt: string, roots: string[]) => Promise<number> | number;
+
+async function setup(o: { users?: number; text?: string; wiki?: boolean; pid?: number } = {}) {
+  const home = join(dir, `h${n++}`);
+  const root = join(home, "repo");
+  await mkdir(join(root, "frontend"), { recursive: true });
+  if (o.wiki !== false) await mkdir(projectWiki(root), { recursive: true });
+  const sessionFile = join(home, "s.jsonl");
+  const lines: object[] = [{ type: "session", id: "abcdef12-3456", timestamp: "2026-11-21T14:38:13.130Z" }];
+  for (let i = 0; i < (o.users ?? 2); i++) {
+    lines.push({ type: "message", id: `u${i}`, message: { role: "user", content: o.text ?? `msg ${i}` } });
+    lines.push({ type: "message", id: `a${i}`, message: { role: "assistant", content: [{ type: "text", text: "ok" }] } });
+  }
+  await writeFile(sessionFile, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+  await writeAtomic(regFile(home, sessionFile), JSON.stringify({ sessionFile, projectRoot: root, pid: o.pid ?? DEAD }));
+  const calls: { prompt: string; roots: string[] }[] = [];
+  const deps = (child: Child = () => 0): Deps => ({
+    home,
+    runChild: async (prompt, roots) => {
+      calls.push({ prompt, roots });
+      return child(prompt, roots);
+    },
+    bdMemories: async () => "",
+    now: () => new Date("2026-11-21T15:00:00Z"),
+    pidAlive: (pid) => pid !== DEAD,
+  });
+  const gw = globalWiki(home);
+  const pw = projectWiki(root);
+  return {
+    home, root, sessionFile, calls, deps, gw, pw,
+    run: (child?: Child, ...args: string[]) =>
+      main(args.length ? args : ["--mode", "session", "--session", sessionFile, "--project", root], deps(child)),
+    state: async (): Promise<State> => JSON.parse(await readFile(join(stateDir(home), "state.json"), "utf8").catch(() => "{}")),
+    commits: () => {
+      try {
+        return execFileSync("git", ["log", "--format=%s"], { cwd: gw, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim().split("\n").filter(Boolean);
+      } catch {
+        return [];
+      }
+    },
+    snapshot: async () => {
+      const out: Record<string, string> = {};
+      for (const d of [gw, pw]) for (const f of await readdir(d).catch(() => [])) if (f !== ".git") out[join(d, f)] = await readFile(join(d, f), "utf8");
+      return out;
+    },
+  };
+}
+
+const writePages = (g: Record<string, string>, p: Record<string, string> = {}): Child => async (_, roots) => {
+  for (const [f, t] of Object.entries(g)) await writeFile(join(roots[0], f), t);
+  for (const [f, t] of Object.entries(p)) await writeFile(join(roots[1], f), t);
+  return 0;
+};
+const G = { "index.md": "- [lesson-a](lesson-a.md): a\n", "lesson-a.md": "fact [s:2026-11-21 abcdef]\n" };
+
+test("happy path publishes and commits once", async () => {
+  const t = await setup();
+  await t.run(writePages(G, { "index.md": "- [overview](overview.md): what\n", "overview.md": "x [s:2026-11-21 abcdef]\n" }));
+  assert.equal(await readFile(join(t.gw, "lesson-a.md"), "utf8"), G["lesson-a.md"]);
+  assert.ok(existsSync(join(t.pw, "overview.md")));
+  assert.deepEqual(t.commits(), ["big brain: [s:2026-11-21 abcdef]"]);
+  assert.match(t.calls[0].prompt, /\[s:2026-11-21 abcdef\]/);
+  assert.match(t.calls[0].prompt, /frontend/);
+  assert.match(t.calls[0].prompt, /USER: msg 0/);
+  assert.equal((await t.state())[t.sessionFile].marker, "a1");
+  assert.equal((await t.state())[t.sessionFile].status, "active");
+  assert.deepEqual(await readdir(join(stateDir(t.home), "runs")), []);
+  assert.ok(!existsSync(join(stateDir(t.home), "lock")));
+});
+
+test("fresh empty global wiki, child writes nothing → no commit, marker advanced", async () => {
+  const t = await setup();
+  await t.run();
+  assert.ok(existsSync(join(t.gw, ".git")));
+  assert.deepEqual(t.commits(), []);
+  assert.equal((await t.state())[t.sessionFile].marker, "a1");
+  assert.ok(!existsSync(join(stateDir(t.home), "log")));
+});
+
+test("final digest → done", async () => {
+  const t = await setup();
+  await t.run(undefined, "--mode", "session", "--session", t.sessionFile, "--project", t.root, "--final");
+  assert.deepEqual((await t.state())[t.sessionFile], { marker: "a1", failures: 0, status: "done" });
+});
+
+test("project-only change → no global commit, project uncommitted", async () => {
+  const t = await setup();
+  await t.run(writePages({}, { "index.md": "- [overview](overview.md): what\n", "overview.md": "x\n" }));
+  assert.ok(existsSync(join(t.pw, "overview.md")));
+  assert.deepEqual(t.commits(), []);
+});
+
+test("child non-zero → live byte-identical, failures=1", async () => {
+  const t = await setup();
+  await t.run(writePages(G));
+  const before = await t.snapshot();
+  await writeFile(t.sessionFile, (await readFile(t.sessionFile, "utf8")) + [
+    { type: "message", id: "u9", message: { role: "user", content: "x" } },
+    { type: "message", id: "u10", message: { role: "user", content: "y" } },
+  ].map((l) => JSON.stringify(l)).join("\n") + "\n");
+  await t.run(async (p, roots) => {
+    await writePages({ "lesson-a.md": "changed\n" })(p, roots);
+    return 1;
+  });
+  assert.deepEqual(await t.snapshot(), before);
+  assert.equal((await t.state())[t.sessionFile].failures, 1);
+  assert.equal((await t.state())[t.sessionFile].marker, "a1");
+  assert.match(await readFile(join(stateDir(t.home), "log"), "utf8"), /child exited 1/);
+});
+
+test("validation failure and secret leave live unchanged", async () => {
+  for (const bad of [{ "notes.md": "x" }, { "lesson-a.md": "key sk-ant-abcdefghijklmnopqrstu" }]) {
+    const t = await setup();
+    await t.run(writePages({ ...G, ...bad }));
+    assert.deepEqual(await t.snapshot(), {});
+    assert.equal((await t.state())[t.sessionFile].failures, 1);
+    assert.equal((await t.state())[t.sessionFile].marker, null);
+  }
+});
+
+test("hash conflict: live page edited during run → nothing published", async () => {
+  const t = await setup();
+  await writeFile(join(t.pw, "overview.md"), "orig\n");
+  await writeFile(join(t.pw, "index.md"), "- [overview](overview.md): o\n");
+  await t.run(async (p, roots) => {
+    await writeFile(join(t.pw, "overview.md"), "hand edit\n");
+    return writePages(G, { "overview.md": "child\n" })(p, roots);
+  });
+  assert.equal(await readFile(join(t.pw, "overview.md"), "utf8"), "hand edit\n");
+  assert.ok(!existsSync(join(t.gw, "lesson-a.md")));
+  assert.deepEqual(t.commits(), []);
+  assert.match(await readFile(join(stateDir(t.home), "log"), "utf8"), /conflict/);
+});
+
+test("project conflict with a global change → neither wiki written", async () => {
+  const t = await setup();
+  await writeFile(join(t.pw, "overview.md"), "orig\n");
+  await t.run(async (p, roots) => {
+    await writeFile(join(t.pw, "overview.md"), "hand\n");
+    return writePages(G, { "overview.md": "child\n" })(p, roots);
+  });
+  assert.ok(!existsSync(join(t.gw, "lesson-a.md")));
+  assert.deepEqual(t.commits(), []);
+});
+
+test("retry after a partial apply succeeds; preflight conflicts write nothing", async () => {
+  const d = join(dir, `pa${n++}`);
+  const [live, staged, live2, staged2] = ["live", "staged", "live2", "staged2"].map((x) => join(d, x));
+  for (const x of [live, staged, live2, staged2]) await mkdir(x, { recursive: true });
+  const sha = (s: string) => createHash("sha256").update(s).digest("hex");
+  await writeFile(join(live, "a.md"), "old a");
+  await writeFile(join(live, "b.md"), "old b");
+  const hashes = new Map([["a.md", sha("old a")], ["b.md", sha("old b")]]);
+  await writeFile(join(staged, "a.md"), "new a");
+  await writeFile(join(staged, "b.md"), "new b");
+  // first attempt died after a.md was renamed in
+  await writeFile(join(live, "a.md"), "new a");
+  assert.equal(await preflightAndApply([{ staged, live, hashes }]), "ok");
+  assert.equal(await readFile(join(live, "b.md"), "utf8"), "new b");
+  assert.deepEqual((await readdir(live)).sort(), ["a.md", "b.md"]);
+  // a hand edit in the second pair blocks the first pair too
+  await writeFile(join(staged, "a.md"), "newer a");
+  await writeFile(join(live2, "c.md"), "hand");
+  await writeFile(join(staged2, "c.md"), "child");
+  const h1 = new Map([["a.md", sha("new a")], ["b.md", sha("new b")]]);
+  assert.equal(await preflightAndApply([{ staged, live, hashes: h1 }, { staged: staged2, live: live2, hashes: new Map([["c.md", sha("orig")]]) }]), "conflict");
+  assert.equal(await readFile(join(live, "a.md"), "utf8"), "new a");
+});
+
+test("deletion via emptied page, and deletion conflict", async () => {
+  const t = await setup();
+  await t.run(writePages(G));
+  await writeFile(t.sessionFile, (await readFile(t.sessionFile, "utf8")) + ["u8", "u9"].map((id) =>
+    JSON.stringify({ type: "message", id, message: { role: "user", content: id } })).join("\n") + "\n");
+  await t.run(writePages({ "index.md": "", "lesson-a.md": "" }));
+  assert.ok(!existsSync(join(t.gw, "lesson-a.md")));
+  assert.deepEqual(t.commits().length, 2);
+});
+
+test("three chunks, chunk 2 fails → marker at chunk 1, next run sends 2 and 3", async () => {
+  const big = "x".repeat(40 * 1024);
+  const t = await setup({ users: 3, text: big });
+  let k = 0;
+  await t.run(() => (++k === 2 ? 1 : 0));
+  assert.equal(t.calls.length, 2);
+  const marker = (await t.state())[t.sessionFile].marker;
+  assert.equal(marker, "a0");
+  t.calls.length = 0;
+  await t.run();
+  assert.equal(t.calls.length, 2);
+  assert.match(t.calls[0].prompt, /USER: x/);
+  assert.equal((await t.state())[t.sessionFile].marker, "a2");
+});
+
+test("lock held by a live pid → no work; stale lock is broken", async () => {
+  const t = await setup();
+  await mkdir(stateDir(t.home), { recursive: true });
+  await writeFile(join(stateDir(t.home), "lock"), String(process.pid));
+  await t.run();
+  assert.equal(t.calls.length, 0);
+  await writeFile(join(stateDir(t.home), "lock"), String(DEAD));
+  await t.run();
+  assert.equal(t.calls.length, 1);
+  assert.ok(!existsSync(join(stateDir(t.home), "lock")));
+});
+
+test("catch-up skips live pid, unregistered, done and skipped sessions", async () => {
+  const t = await setup({ pid: process.pid });
+  const catchup = (child?: Child) => t.run(child, "--mode", "catchup", "--project", t.root);
+  await catchup();
+  assert.equal(t.calls.length, 0, "live pid");
+  for (const [name, status] of [["done", "done"], ["skipped", "skipped"], ["active", "active"]] as const) {
+    const f = join(t.home, `${name}.jsonl`);
+    await writeFile(f, await readFile(t.sessionFile, "utf8"));
+    await writeAtomic(regFile(t.home, f), JSON.stringify({ sessionFile: f, projectRoot: t.root, pid: DEAD }));
+    const st = await t.state();
+    st[f] = { marker: null, failures: 0, status };
+    await writeAtomic(join(stateDir(t.home), "state.json"), JSON.stringify(st));
+  }
+  await writeFile(join(t.home, "unregistered.jsonl"), await readFile(t.sessionFile, "utf8"));
+  await catchup();
+  assert.equal(t.calls.length, 1);
+  assert.ok(t.calls[0].roots.length === 2);
+  assert.equal((await t.state())[join(t.home, "active.jsonl")].marker, "a1");
+  // a different project is not caught up
+  t.calls.length = 0;
+  await t.run(undefined, "--mode", "catchup", "--project", "/elsewhere");
+  assert.equal(t.calls.length, 0);
+});
+
+test("1-user-message slice waits; on final the marker moves and status is done", async () => {
+  const t = await setup({ users: 1 });
+  await t.run();
+  assert.equal(t.calls.length, 0);
+  assert.equal((await t.state())[t.sessionFile], undefined);
+  await t.run(undefined, "--mode", "session", "--session", t.sessionFile, "--project", t.root, "--final");
+  assert.equal(t.calls.length, 0);
+  assert.deepEqual((await t.state())[t.sessionFile], { marker: "a0", failures: 0, status: "done" });
+});
+
+test("2-message slice split across chunks is digested", async () => {
+  const t = await setup({ users: 2, text: "y".repeat(50 * 1024) });
+  await t.run();
+  assert.equal(t.calls.length, 2);
+  assert.equal((await t.state())[t.sessionFile].marker, "a1");
+});
+
+test("3 failures → skipped", async () => {
+  const t = await setup();
+  for (let i = 0; i < 4; i++) await t.run(() => 1);
+  assert.equal(t.calls.length, 3);
+  assert.deepEqual((await t.state())[t.sessionFile], { marker: null, failures: 3, status: "skipped" });
+});
+
+test("project wiki not created when .pi/wiki is absent; global still updates", async () => {
+  const t = await setup({ wiki: false });
+  await t.run(writePages(G));
+  assert.equal(t.calls[0].roots.length, 1);
+  assert.match(t.calls[0].prompt, /no project wiki/);
+  assert.ok(!existsSync(t.pw));
+  assert.ok(existsSync(join(t.gw, "lesson-a.md")));
+  assert.equal(t.commits().length, 1);
+});
