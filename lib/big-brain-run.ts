@@ -198,7 +198,8 @@ async function digest(deps: Deps, sd: string, reg: Reg, final: boolean, save: (s
   const head = entries.find((e) => e.type === "session");
   const cite = citation(reg.sessionFile, head?.id ?? end, head?.timestamp ?? deps.now().toISOString());
   const slice = sliceAfter(entries, s.marker, end);
-  if (userCount(slice) < 2) {
+  // failures > 0 means a slice that passed the gate was cut short; its remainder must still be digested
+  if (userCount(slice) < 2 && s.failures === 0) {
     if (final) await save({ ...s, marker: end, status: "done" });
     return;
   }
@@ -214,7 +215,7 @@ async function digest(deps: Deps, sd: string, reg: Reg, final: boolean, save: (s
       return;
     }
   }
-  if (final) await save({ ...s, marker: end, status: "done" });
+  await save({ ...s, marker: end, failures: 0, status: final ? "done" : s.status });
 }
 
 export async function main(argv: string[], deps: Deps): Promise<void> {

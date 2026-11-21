@@ -261,6 +261,18 @@ test("2-message slice split across chunks is digested", async () => {
   assert.equal((await t.state())[t.sessionFile].marker, "a1");
 });
 
+test("remainder of a partly digested slice is digested even under 2 users", async () => {
+  const t = await setup({ users: 2, text: "y".repeat(50 * 1024) });
+  let k = 0;
+  await t.run(() => (++k === 2 ? 1 : 0));
+  assert.equal((await t.state())[t.sessionFile].marker, "a0");
+  t.calls.length = 0;
+  await t.run(undefined, "--mode", "session", "--session", t.sessionFile, "--project", t.root, "--final");
+  assert.equal(t.calls.length, 1);
+  assert.match(t.calls[0].prompt, /USER: y/);
+  assert.deepEqual((await t.state())[t.sessionFile], { marker: "a1", failures: 0, status: "done" });
+});
+
 test("3 failures → skipped", async () => {
   const t = await setup();
   for (let i = 0; i < 4; i++) await t.run(() => 1);
