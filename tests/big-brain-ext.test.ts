@@ -131,6 +131,16 @@ test("initCandidates matches main and worktree dirs and applies the skip rules",
   assert.ok(got.every((c) => c.calls >= 1 && c.mtimeMs > 0));
 });
 
+test("initCandidates skips a deleted but unpruned worktree", async () => {
+  const { base, home, proj, session } = await project();
+  const dead = join(base, "dead-wt");
+  git(proj, "worktree", "add", "-q", dead);
+  await rm(dead, { recursive: true, force: true });
+  await session("d", "2026-01-01_dead.jsonl", dead, ["a", "b"]);
+  const live = await session("m", "2026-01-01_main.jsonl", proj, ["a", "b"]);
+  assert.deepEqual(initCandidates(proj, 30, home, Date.now(), undefined).map((c) => c.sessionFile), [live]);
+});
+
 const PREAMBLE_TEXT = "You are working inside Orca, a multi-agent IDE. You are a dispatched worker.\nTASK";
 
 function loadCmd(cwd: string, answer = true) {

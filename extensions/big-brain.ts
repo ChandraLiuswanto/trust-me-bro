@@ -43,9 +43,11 @@ export function mainCheckout(cwd: string): string | null {
 
 export function initCandidates(projectRoot: string, days: number, home: string, now: number, exclude: string | undefined): Candidate[] {
   const roots = execFileSync("git", ["-C", projectRoot, "worktree", "list", "--porcelain"], { encoding: "utf8" })
-    .split("\n")
-    .filter((l) => l.startsWith("worktree "))
-    .map((l) => l.slice(9));
+    .split("\n\n")
+    .map((b) => ({ path: b.match(/^worktree (.+)$/m)?.[1], live: !/^prunable/m.test(b) }))
+    // main checkout (first block) always counts; linked worktrees only while live
+    .filter((w, i): w is { path: string; live: boolean } => !!w.path && (i === 0 || (w.live && existsSync(w.path))))
+    .map((w) => w.path);
   const inProject = (cwd: unknown) => typeof cwd === "string" && roots.some((r) => cwd === r || cwd.startsWith(r + "/"));
   const sessions = join(home, ".pi", "agent", "sessions");
   const out: Candidate[] = [];
