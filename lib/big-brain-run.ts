@@ -1,15 +1,16 @@
-import { appendFile, copyFile, mkdir, readdir, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
+import { appendFile, copyFile, mkdir, readdir, readFile, rename, rm, rmdir, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { execFile, spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, promisify } from "node:util";
 import {
   GLOBAL_TYPES,
-  MAX_PAGES,
+  INDEX_CAP,
   MAX_PAGE_LINES,
+  PROJECT_TYPES,
   areas,
   chunk,
   citation,
@@ -35,7 +36,7 @@ export type Deps = {
   now: () => Date;
   pidAlive: (pid: number) => boolean;
 };
-export type WikiPair = { staged: string; live: string; hashes: Map<string, string> }; // hashes: live filename -> sha256 at staging time
+export type WikiPair = { staged: string; live: string; hashes: Map<string, string> }; // hashes: live page path -> sha256 at staging time
 
 const CHILD_TIMEOUT = 5 * 60_000;
 const MAX_FAILURES = 3;
@@ -43,9 +44,25 @@ const exec = promisify(execFile);
 const sha = (s: string | Buffer) => createHash("sha256").update(s).digest("hex");
 const readOr = (p: string) => readFile(p, "utf8").catch(() => null);
 
+// index.md plus type/x.md, one folder level; skips .git and dot-entries
 async function mdFiles(dir: string): Promise<string[]> {
-  const ents = await readdir(dir, { withFileTypes: true }).catch(() => []);
-  return ents.filter((d) => d.isFile() && d.name.endsWith(".md")).map((d) => d.name);
+  const out: string[] = [];
+  for (const d of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    if (d.name.startsWith(".")) continue;
+    if (d.isFile() && d.name === "index.md") out.push(d.name);
+    if (!d.isDirectory()) continue;
+    for (const f of await readdir(join(dir, d.name), { withFileTypes: true }))
+      if (f.isFile() && f.name.endsWith(".md") && !f.name.startsWith(".")) out.push(`${d.name}/${f.name}`);
+  }
+  return out;
+}
+
+// removes the type dirs of these paths that are now empty
+async function rmEmptyDirs(root: string, paths: string[]): Promise<void> {
+  for (const d of new Set(paths.filter((p) => p.includes("/")).map(dirname)))
+    await rmdir(join(root, d)).catch((e) => {
+      if (!["ENOTEMPTY", "ENOENT", "EEXIST"].includes(e.code)) throw e;
+    });
 }
 
 async function stage(live: string, staged: string): Promise<Map<string, string>> {
@@ -53,6 +70,7 @@ async function stage(live: string, staged: string): Promise<Map<string, string>>
   const hashes = new Map<string, string>();
   for (const f of await mdFiles(live)) {
     hashes.set(f, sha(await readFile(join(live, f))));
+    await mkdir(dirname(join(staged, f)), { recursive: true });
     await copyFile(join(live, f), join(staged, f));
   }
   return hashes;
@@ -60,7 +78,7 @@ async function stage(live: string, staged: string): Promise<Map<string, string>>
 
 // shortcut: if apply fails or the supervisor dies mid-publish, a chunk can be half-published until the next run redoes
 // it. Each page stays whole, since every write is a rename. Upgrade to a publish journal if this is ever seen.
-// returns, per pair, the filenames written or deleted
+// returns, per pair, the page paths written or deleted
 export async function preflightAndApply(pairs: WikiPair[]): Promise<string[][] | "conflict"> {
   const plans: { live: string; writes: [string, string][]; deletes: string[] }[] = [];
   for (const { staged, live, hashes } of pairs) {
@@ -85,11 +103,14 @@ export async function preflightAndApply(pairs: WikiPair[]): Promise<string[][] |
   }
   for (const { live, writes, deletes } of plans) {
     for (const [f, text] of writes) {
-      const tmp = join(live, `.${f}.${randomBytes(4).toString("hex")}.tmp`);
+      const target = join(live, f);
+      await mkdir(dirname(target), { recursive: true });
+      const tmp = join(dirname(target), `.${basename(f)}.${randomBytes(4).toString("hex")}.tmp`);
       await writeFile(tmp, text);
-      await rename(tmp, join(live, f));
+      await rename(tmp, target);
     }
     for (const f of deletes) await unlink(join(live, f));
+    await rmEmptyDirs(live, deletes);
   }
   return plans.map((p) => [...p.writes.map(([f]) => f), ...p.deletes]);
 }
@@ -100,25 +121,31 @@ function buildPrompt(o: {
 }): string {
   const project = o.project
     ? `Project wiki (staging copy): ${o.project}/
-  What the project is, how its parts fit, decisions and why, gotchas spanning several facts.
-  Page types: overview.md (what the project is and how its parts fit; at most one), decision-<area>-<topic>.md (a choice made and why), gotcha-<area>-<topic>.md (traps spanning several facts; single facts stay in bd).
+  What a future session in this project needs and can't read from the code. One folder per type:
+  | Type | Holds |
+  | gotcha | Known failures and traps: what breaks, why, and how to avoid it |
+  | fact | True but not in the code: domain rules, deploy and ops order, where things live |
+  | decision | Only a choice that no spec or doc records, always with the reason and what was ruled out |
+  Write a decision only when no spec or doc records it: first check the repo's docs/ (e.g. \`docs/superpowers/specs/\`) and README; if one covers it, write nothing, or at most a fact line pointing to it.
   Areas: ${o.areas.join(", ")} (db = schema and migrations, cross = spans apps).`
     : "There is no project wiki for this session. Write only global pages.";
-  return `You maintain a memory wiki of notes from Pi coding sessions with Chandra. Below is one chunk of a past session transcript. Update the wiki staging copies so future sessions benefit, using only the read, write and edit tools. Write only directly inside the staging dirs below, never anywhere else.
+  return `You maintain a memory wiki of notes from Pi coding sessions with Chandra. Below is one chunk of a past session transcript. Update the wiki staging copies so future sessions benefit, using only the read, write and edit tools. Write only inside the staging dirs below (one type folder level deep), never anywhere else.
 
 Global wiki (staging copy): ${o.global}/
   Chandra's preferences and corrections; machine/environment facts; lessons that apply across projects.
-  Page types: ${GLOBAL_TYPES.map((t) => `${t}-<slug>.md`).join(", ")} (preference = how Chandra wants things done, environment = this machine and its tools, lesson = techniques and gotchas that apply across projects).
+  One folder per type: ${GLOBAL_TYPES.map((t) => `${t}/<slug>.md`).join(", ")} (preference = how Chandra wants things done, environment = this machine and its tools, lesson = techniques and gotchas that apply across projects).
 ${project}
 
 Rules:
 - The default is to write nothing. Keep only what a future session would want, and that isn't already in APPEND_SYSTEM.md, AGENTS.md, CLAUDE.md, bd, or the repo's own docs (README.md, docs/, a hand-written wiki/). You may read those but never write there; link to them instead of copying.
+- Don't record session history: no worktree paths, branch names, commit hashes, test counts, merge/push/deploy status or review/approval narration.
 - Rewrite pages; don't just append. Merge duplicates. When a newer session contradicts a fact, replace it and keep the newer citation. To delete a page, overwrite it with empty content.
 - Every fact line ends with this session's citation: ${o.cite}
-- Caps: about ${MAX_PAGE_LINES} lines per page, ${MAX_PAGES} pages per wiki, index entries one line each.
+- Caps: about ${MAX_PAGE_LINES} lines per page, index entries one line each.
 - Never write secrets: keys, tokens, passwords, auth URLs, private user data.
-- Name every page <type>-<slug>.md (lowercase a-z, 0-9, -) using that wiki's types. Project decision/gotcha slugs start with an area. Put a fact on the page of the type it belongs to. No subdirectories, no other files.
-- Keep each wiki's index.md in sync with its pages. Each line is "- [name](name.md): <the concrete topics on the page>", with relative links, e.g. "commit messages, reply length, review habits", not "preferences".
+- Name every page <type>/<slug>.md (slug: lowercase a-z, 0-9, -) using that wiki's types (${PROJECT_TYPES.join(", ")} for the project wiki); project pages are <type>/<area>-<slug>.md. Exactly one folder level. Put a fact on the page of the type it belongs to. No other files; index.md sits only at the wiki root.
+- Keep each wiki's index.md in sync with its pages: one line per page under a "### <type>" heading per non-empty folder. Each line is "- [type/name](type/name.md): <the concrete topics on the page>", with links relative to the wiki root, e.g. "commit messages, reply length, review habits", not "preferences".
+- Keep each index.md under ${INDEX_CAP} bytes (INDEX_CAP; current size: global ${Buffer.byteLength(o.globalIndex)} bytes, project ${Buffer.byteLength(o.projectIndex)} bytes). If an update would exceed the cap, merge related pages or shorten lines.
 
 Current global index.md:
 ${o.globalIndex.trim() || "(empty)"}
@@ -157,7 +184,10 @@ async function runChunk(deps: Deps, sd: string, reg: Reg, cite: string, c: Chunk
     // the child has no delete tool; an emptied page means "remove it"
     for (const p of pairs)
       for (const f of await mdFiles(p.staged))
-        if (!(await readFile(join(p.staged, f), "utf8")).trim()) await unlink(join(p.staged, f));
+        if (!(await readFile(join(p.staged, f), "utf8")).trim()) {
+          await unlink(join(p.staged, f));
+          await rmEmptyDirs(p.staged, [f]);
+        }
     for (const [i, p] of pairs.entries()) {
       const err = validateWiki(p.staged, i === 0 ? "global" : "project", A);
       if (err) throw new Error(`validation: ${err}`);
@@ -262,7 +292,7 @@ export function pidAlive(pid: number): boolean {
   }
 }
 
-const realDeps: Deps = {
+export const realDeps: Deps = {
   home: homedir(),
   async runChild(prompt, roots, timeoutMs) {
     const guard = fileURLToPath(new URL("./big-brain-guard.ts", import.meta.url));

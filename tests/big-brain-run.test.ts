@@ -5,9 +5,9 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { globalWiki, projectWiki, regFile, stateDir, writeAtomic, type State } from "../lib/big-brain.ts";
+import { INDEX_CAP, globalWiki, projectWiki, regFile, stateDir, writeAtomic, type State } from "../lib/big-brain.ts";
 import { main, pidAlive, preflightAndApply, type Deps } from "../lib/big-brain-run.ts";
 
 const dir = await mkdtemp(join(tmpdir(), "big-brain-run-"));
@@ -58,24 +58,30 @@ async function setup(o: { users?: number; text?: string; wiki?: boolean; pid?: n
     },
     snapshot: async () => {
       const out: Record<string, string> = {};
-      for (const d of [gw, pw]) for (const f of await readdir(d).catch(() => [])) if (f !== ".git") out[join(d, f)] = await readFile(join(d, f), "utf8");
+      for (const d of [gw, pw])
+        for (const f of await readdir(d, { recursive: true }).catch(() => [] as string[]))
+          if (!f.startsWith(".git") && f.endsWith(".md")) out[join(d, f)] = await readFile(join(d, f), "utf8");
       return out;
     },
   };
 }
 
 const writePages = (g: Record<string, string>, p: Record<string, string> = {}): Child => async (_, roots) => {
-  for (const [f, t] of Object.entries(g)) await writeFile(join(roots[0], f), t);
-  for (const [f, t] of Object.entries(p)) await writeFile(join(roots[1], f), t);
+  for (const [r, files] of [[roots[0], g], [roots[1], p]] as const)
+    for (const [f, t] of Object.entries(files)) {
+      await mkdir(dirname(join(r, f)), { recursive: true });
+      await writeFile(join(r, f), t);
+    }
   return 0;
 };
-const G = { "index.md": "- [lesson-a](lesson-a.md): a\n", "lesson-a.md": "fact [s:2026-11-21 abcdef]\n" };
+const G = { "index.md": "### lesson\n- [lesson/a](lesson/a.md): a\n", "lesson/a.md": "fact [s:2026-11-21 abcdef]\n" };
+const P = { "index.md": "### gotcha\n- [gotcha/db-x](gotcha/db-x.md): what\n", "gotcha/db-x.md": "x [s:2026-11-21 abcdef]\n" };
 
 test("happy path publishes and commits once", async () => {
   const t = await setup();
-  await t.run(writePages(G, { "index.md": "- [overview](overview.md): what\n", "overview.md": "x [s:2026-11-21 abcdef]\n" }));
-  assert.equal(await readFile(join(t.gw, "lesson-a.md"), "utf8"), G["lesson-a.md"]);
-  assert.ok(existsSync(join(t.pw, "overview.md")));
+  await t.run(writePages(G, P));
+  assert.equal(await readFile(join(t.gw, "lesson/a.md"), "utf8"), G["lesson/a.md"]);
+  assert.ok(existsSync(join(t.pw, "gotcha/db-x.md")), "type dir created in live");
   assert.deepEqual(t.commits(), ["big brain: [s:2026-11-21 abcdef]"]);
   assert.match(t.calls[0].prompt, /\[s:2026-11-21 abcdef\]/);
   assert.match(t.calls[0].prompt, /frontend/);
@@ -83,6 +89,16 @@ test("happy path publishes and commits once", async () => {
   assert.equal((await t.state())[t.sessionFile].marker, "a1");
   assert.equal((await t.state())[t.sessionFile].status, "active");
   assert.deepEqual(await readdir(join(stateDir(t.home), "runs")), []);
+});
+
+test("prompt: no-history rule, folder types, index cap and size", async () => {
+  const t = await setup();
+  await writeFile(join(t.pw, "index.md"), "");
+  await t.run(writePages(G, P));
+  const p = t.calls[0].prompt;
+  assert.ok(p.includes("- Don't record session history: no worktree paths, branch names, commit hashes, test counts, merge/push/deploy status or review/approval narration.\n- Rewrite pages"));
+  for (const w of ["decision", "fact", "gotcha", `${INDEX_CAP} bytes`, "current size: global 0 bytes, project 0 bytes", "docs/superpowers/specs/"]) assert.ok(p.includes(w), w);
+  for (const w of ["overview.md", "pages per wiki", "MAX_PAGES"]) assert.ok(!p.includes(w), w);
 });
 
 test("fresh empty global wiki, child writes nothing → no commit, marker advanced", async () => {
@@ -99,15 +115,16 @@ test("global commit holds only the pages the run changed", async () => {
   await mkdir(t.gw, { recursive: true });
   execFileSync("git", ["init", "-q"], { cwd: t.gw });
   const g = (...a: string[]) => execFileSync("git", ["-c", "user.name=u", "-c", "user.email=u@x", ...a], { cwd: t.gw, encoding: "utf8" });
-  await writeFile(join(t.gw, "lesson-b.md"), "b\n");
-  g("add", "lesson-b.md");
+  await mkdir(join(t.gw, "lesson"));
+  await writeFile(join(t.gw, "lesson/b.md"), "b\n");
+  g("add", "lesson/b.md");
   g("commit", "-q", "-m", "init");
   await writeFile(join(t.gw, "secret.txt"), "sk-ant-abcdefghijklmnopqrstu");
-  await writeFile(join(t.gw, "lesson-b.md"), "user edit\n");
-  g("add", "lesson-b.md");
-  await t.run(writePages({ "index.md": "- [lesson-a](lesson-a.md): a\n- [lesson-b](lesson-b.md): b\n", "lesson-a.md": "fact\n" }));
-  assert.deepEqual(g("show", "--name-only", "--format=", "HEAD").trim().split("\n").sort(), ["index.md", "lesson-a.md"]);
-  assert.equal(g("diff", "--cached", "--name-only").trim(), "lesson-b.md");
+  await writeFile(join(t.gw, "lesson/b.md"), "user edit\n");
+  g("add", "lesson/b.md");
+  await t.run(writePages({ "index.md": "### lesson\n- [lesson/a](lesson/a.md): a\n- [lesson/b](lesson/b.md): b\n", "lesson/a.md": "fact\n" }));
+  assert.deepEqual(g("show", "--name-only", "--format=", "HEAD").trim().split("\n").sort(), ["index.md", "lesson/a.md"]);
+  assert.equal(g("diff", "--cached", "--name-only").trim(), "lesson/b.md");
   assert.match(g("status", "--porcelain"), /\?\? secret.txt/);
 });
 
@@ -119,8 +136,8 @@ test("final digest → done", async () => {
 
 test("project-only change → no global commit, project uncommitted", async () => {
   const t = await setup();
-  await t.run(writePages({}, { "index.md": "- [overview](overview.md): what\n", "overview.md": "x\n" }));
-  assert.ok(existsSync(join(t.pw, "overview.md")));
+  await t.run(writePages({}, P));
+  assert.ok(existsSync(join(t.pw, "gotcha/db-x.md")));
   assert.deepEqual(t.commits(), []);
 });
 
@@ -133,7 +150,7 @@ test("child non-zero → live byte-identical, failures=1", async () => {
     { type: "message", id: "u10", message: { role: "user", content: "y" } },
   ].map((l) => JSON.stringify(l)).join("\n") + "\n");
   await t.run(async (p, roots) => {
-    await writePages({ "lesson-a.md": "changed\n" })(p, roots);
+    await writePages({ "lesson/a.md": "changed\n" })(p, roots);
     return 1;
   });
   assert.deepEqual(await t.snapshot(), before);
@@ -143,7 +160,7 @@ test("child non-zero → live byte-identical, failures=1", async () => {
 });
 
 test("validation failure and secret leave live unchanged", async () => {
-  for (const bad of [{ "notes.md": "x" }, { "lesson-a.md": "key sk-ant-abcdefghijklmnopqrstu" }]) {
+  for (const bad of [{ "notes/x.md": "x" }, { "lesson/a.md": "key sk-ant-abcdefghijklmnopqrstu" }, { "lesson/b.md": "unlisted" }]) {
     const t = await setup();
     await t.run(writePages({ ...G, ...bad }));
     assert.deepEqual(await t.snapshot(), {});
@@ -154,51 +171,54 @@ test("validation failure and secret leave live unchanged", async () => {
 
 test("hash conflict: live page edited during run → nothing published", async () => {
   const t = await setup();
-  await writeFile(join(t.pw, "overview.md"), "orig\n");
-  await writeFile(join(t.pw, "index.md"), "- [overview](overview.md): o\n");
+  await mkdir(join(t.pw, "gotcha"));
+  await writeFile(join(t.pw, "gotcha/db-x.md"), "orig\n");
+  await writeFile(join(t.pw, "index.md"), P["index.md"]);
   await t.run(async (p, roots) => {
-    await writeFile(join(t.pw, "overview.md"), "hand edit\n");
-    return writePages(G, { "overview.md": "child\n" })(p, roots);
+    await writeFile(join(t.pw, "gotcha/db-x.md"), "hand edit\n");
+    return writePages(G, { "gotcha/db-x.md": "child\n" })(p, roots);
   });
-  assert.equal(await readFile(join(t.pw, "overview.md"), "utf8"), "hand edit\n");
-  assert.ok(!existsSync(join(t.gw, "lesson-a.md")));
+  assert.equal(await readFile(join(t.pw, "gotcha/db-x.md"), "utf8"), "hand edit\n");
+  assert.ok(!existsSync(join(t.gw, "lesson/a.md")), "nested conflict publishes nothing in either wiki");
   assert.deepEqual(t.commits(), []);
   assert.match(await readFile(join(stateDir(t.home), "log"), "utf8"), /conflict/);
 });
 
 test("project conflict with a global change → neither wiki written", async () => {
   const t = await setup();
-  await writeFile(join(t.pw, "overview.md"), "orig\n");
+  await mkdir(join(t.pw, "fact"));
+  await writeFile(join(t.pw, "fact/db-y.md"), "orig\n");
+  await writeFile(join(t.pw, "index.md"), "### fact\n- [fact/db-y](fact/db-y.md): y\n");
   await t.run(async (p, roots) => {
-    await writeFile(join(t.pw, "overview.md"), "hand\n");
-    return writePages(G, { "overview.md": "child\n" })(p, roots);
+    await writeFile(join(t.pw, "fact/db-y.md"), "hand\n");
+    return writePages(G, { "fact/db-y.md": "child\n" })(p, roots);
   });
-  assert.ok(!existsSync(join(t.gw, "lesson-a.md")));
+  assert.ok(!existsSync(join(t.gw, "lesson/a.md")));
   assert.deepEqual(t.commits(), []);
 });
 
 test("retry after a partial apply succeeds; preflight conflicts write nothing", async () => {
   const d = join(dir, `pa${n++}`);
   const [live, staged, live2, staged2] = ["live", "staged", "live2", "staged2"].map((x) => join(d, x));
-  for (const x of [live, staged, live2, staged2]) await mkdir(x, { recursive: true });
+  for (const x of [live, staged, live2, staged2]) await mkdir(join(x, "t"), { recursive: true });
   const sha = (s: string) => createHash("sha256").update(s).digest("hex");
-  await writeFile(join(live, "a.md"), "old a");
-  await writeFile(join(live, "b.md"), "old b");
-  const hashes = new Map([["a.md", sha("old a")], ["b.md", sha("old b")]]);
-  await writeFile(join(staged, "a.md"), "new a");
-  await writeFile(join(staged, "b.md"), "new b");
+  await writeFile(join(live, "t/a.md"), "old a");
+  await writeFile(join(live, "t/b.md"), "old b");
+  const hashes = new Map([["t/a.md", sha("old a")], ["t/b.md", sha("old b")]]);
+  await writeFile(join(staged, "t/a.md"), "new a");
+  await writeFile(join(staged, "t/b.md"), "new b");
   // first attempt died after a.md was renamed in
-  await writeFile(join(live, "a.md"), "new a");
-  assert.deepEqual(await preflightAndApply([{ staged, live, hashes }]), [["b.md"]]);
-  assert.equal(await readFile(join(live, "b.md"), "utf8"), "new b");
-  assert.deepEqual((await readdir(live)).sort(), ["a.md", "b.md"]);
+  await writeFile(join(live, "t/a.md"), "new a");
+  assert.deepEqual(await preflightAndApply([{ staged, live, hashes }]), [["t/b.md"]]);
+  assert.equal(await readFile(join(live, "t/b.md"), "utf8"), "new b");
+  assert.deepEqual((await readdir(join(live, "t"))).sort(), ["a.md", "b.md"], "no tmp file left in the type dir");
   // a hand edit in the second pair blocks the first pair too
-  await writeFile(join(staged, "a.md"), "newer a");
-  await writeFile(join(live2, "c.md"), "hand");
-  await writeFile(join(staged2, "c.md"), "child");
-  const h1 = new Map([["a.md", sha("new a")], ["b.md", sha("new b")]]);
-  assert.equal(await preflightAndApply([{ staged, live, hashes: h1 }, { staged: staged2, live: live2, hashes: new Map([["c.md", sha("orig")]]) }]), "conflict");
-  assert.equal(await readFile(join(live, "a.md"), "utf8"), "new a");
+  await writeFile(join(staged, "t/a.md"), "newer a");
+  await writeFile(join(live2, "t/c.md"), "hand");
+  await writeFile(join(staged2, "t/c.md"), "child");
+  const h1 = new Map([["t/a.md", sha("new a")], ["t/b.md", sha("new b")]]);
+  assert.equal(await preflightAndApply([{ staged, live, hashes: h1 }, { staged: staged2, live: live2, hashes: new Map([["t/c.md", sha("orig")]]) }]), "conflict");
+  assert.equal(await readFile(join(live, "t/a.md"), "utf8"), "new a");
 });
 
 test("deletion via emptied page, and deletion conflict", async () => {
@@ -206,8 +226,9 @@ test("deletion via emptied page, and deletion conflict", async () => {
   await t.run(writePages(G));
   await writeFile(t.sessionFile, (await readFile(t.sessionFile, "utf8")) + ["u8", "u9"].map((id) =>
     JSON.stringify({ type: "message", id, message: { role: "user", content: id } })).join("\n") + "\n");
-  await t.run(writePages({ "index.md": "", "lesson-a.md": "" }));
-  assert.ok(!existsSync(join(t.gw, "lesson-a.md")));
+  await t.run(writePages({ "index.md": "", "lesson/a.md": "" }));
+  assert.ok(!existsSync(join(t.gw, "lesson/a.md")));
+  assert.ok(!existsSync(join(t.gw, "lesson")), "empty type dir removed");
   assert.deepEqual(t.commits().length, 2);
 });
 
@@ -345,7 +366,7 @@ test("project wiki not created when .pi/wiki is absent; global still updates", a
   assert.equal(t.calls[0].roots.length, 1);
   assert.match(t.calls[0].prompt, /no project wiki/);
   assert.ok(!existsSync(t.pw));
-  assert.ok(existsSync(join(t.gw, "lesson-a.md")));
+  assert.ok(existsSync(join(t.gw, "lesson/a.md")));
   assert.equal(t.commits().length, 1);
 });
 
