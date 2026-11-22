@@ -24,10 +24,13 @@
 | `lib/big-brain-run.ts`, `tests/big-brain-run.test.ts` | 2 (after 1: run tests call the real `validateWiki`) |
 | `lib/big-brain-guard.ts`, `tests/big-brain-guard.test.ts` | 3 |
 | `README.md` | 4 |
-| `.scratch/bbtest/` (untracked) | 5, 6 (after 2) |
+| `.scratch/bbtest/` (untracked) | 5 (after 2 and 3) |
+| `.scratch/eval/` (untracked) | 6 (after 2 and 3) |
 
 - **Parallel heads:** 1, 3 and 4.
-- **Chain:** 2 waits for 1, because the files are disjoint but `runChunk` calls the real `validateWiki`. 5 and 6 wait for 2.
+- **Chain:** 2 waits for 1, because the files are disjoint but `runChunk` calls the real `validateWiki`.
+- **Evals:** 5 and 6 wait for both 2 and 3, because their children write nested pages through the new guard. Once
+  both are done, 5 and 6 run in parallel.
 
 ## Blast Radius
 
@@ -42,7 +45,8 @@
 | `areas` (`:132`) | `run.ts:13,144,149` (prompt + validation), test `big-brain.test.ts:123-128` | Task 1 makes `areas()` return normalized names (`_` → `-`), so both callers get them for free. A test case is added. |
 | `capIndex` / `injectBlock` (`:182,191`) | `extensions/big-brain.ts:135`; tests `big-brain.test.ts:173-188` | Task 1 changes the link rewrite regex to `type/x.md` and drops the truncation. The extension is unaffected (it passes raw index text), but `tests/big-brain-ext.test.ts:15,67` uses a flat `lesson-x.md` index. That still injects, because `capIndex` doesn't validate, and the assertion only matches `lesson-x\.md`. Leave it. |
 | `mdFiles`, `stage`, `preflightAndApply`, empty-page delete, git add/commit (`run.ts:46-95,157-172`) | `runChunk` only; `preflightAndApply` exported and used by tests `big-brain-run.test.ts` | Task 2: page paths, mkdir of the type dir on write, rmdir of an empty type dir after a delete, staging copies subdirs. Every fixture in `big-brain-run.test.ts` that uses `overview.md` or flat `lesson-a.md` (lines 72-176) moves to the new layout. |
-| `buildPrompt` (`run.ts:97`) | `runChunk` only; `.scratch/bbtest/run-copy.ts` (a scratch copy) | Task 2. Tasks 5 and 6 regenerate `run-copy.ts` from the new file. |
+| `buildPrompt` (`run.ts:97`) | `runChunk` only; `.scratch/bbtest/run-copy.ts` (a scratch copy) | Task 2. Task 5 regenerates `run-copy.ts` from the new file. |
+| `realDeps` (`run.ts:265`, not exported) | the `import.meta.main` block | Task 2 exports it (`export const realDeps`), so the Task 6 eval driver can call `main(argv, { ...realDeps, home: tmp })`. No other effect. |
 | `allowedTarget` (`guard.ts:19`) | guard handler `:52`; tests `big-brain-guard.test.ts:20-37` (line 26 asserts `root/sub/x.md` is rejected) | Task 3 allows exactly one subdir level and flips that assertion to allowed. Two-level paths stay rejected. |
 | `extensions/big-brain.ts` | `/big-brain-init` `mkdirSync(projectWiki)`; injection reads `index.md` | Unaffected: no page paths there (grep `\.md` shows only `index.md`). |
 | `README.md:112-131` | docs | Task 4. |
@@ -125,6 +129,8 @@
   - the prompt contains the no-history rule verbatim, `decision`, `fact`, `gotcha`, `INDEX_CAP` and the current index size, and does not contain `overview.md` or `MAX_PAGES`/"pages per wiki"
   - `writePages` in tests must create the dirs
 - [ ] **Step 2:** run the tests and see them fail. **Step 3:** implement. **Step 4:** `node --test tests/*.test.ts` is all green.
+Also `export const realDeps` (used by the Task 6 driver).
+
 - [ ] **Step 5:** commit `feat(big-brain): runner handles type folders; no-history prompt rule`.
 
 ## Task 3: guard (`lib/big-brain-guard.ts`)
@@ -170,6 +176,9 @@ All work stays in `.scratch/bbtest/` (untracked, never committed).
      - `idx()` reads the new index.
      - The prompt replace for `extra` is dropped: the rule is built in now, and "control" means the old prompt from `git show main:lib/big-brain-run.ts`.
      - Keep 4 parallel workers, 5-min timeouts and `--tools read,write,edit`.
+     - **Guard path:** `micro.ts` hardcodes `/home/chandraliuswanto/trust-me-bro/lib/big-brain-guard.ts`, the old flat-only guard. Replace it with this worktree's `lib/big-brain-guard.ts` via `new URL("../../lib/big-brain-guard.ts", import.meta.url)`.
+     - **Control arm:** must use the old guard from `main`, because the old prompt writes flat pages. Copy `git show main:lib/big-brain-guard.ts` into `.scratch/bbtest/guard-main.ts` and use that for control.
+     - **Check before running:** grep that no `/home/chandraliuswanto/trust-me-bro/` path remains.
 2. **Run:** the same 4 sessions × 3 reps for new and control (control output already exists in `out/control/`; rerun it only if the harness changed what control means).
 3. **Score:** read every written line and mark it history or durable.
 4. **Pass:**
@@ -187,7 +196,12 @@ All work stays in `.scratch/eval/` (untracked). Only the coordinator launches th
 1. **Build the wiki (time split):** for each human session in `~/.pi/agent/sessions/--data-projects-new_bsa_react--/` with a basename before `2026-11-19`, at least 2 user messages and not a worker (use `initCandidates`' rules), run the new runner's digest into a temp wiki pair. Use the real `main()` with `Deps` pointed at a temp HOME whose `.pi/agent/settings.json` copies `bigBrain.model`, and a temp project root.
    - **Project root:** a `git worktree add --detach /var/tmp/pi-scratch/bsa-eval-src <commit>` of new_bsa_react at commit `6749a8d8`, the last main commit before 2026-11-19 01:27 local. Its `.pi/wiki` is the project wiki.
    - **Registrations:** write records with `pid: 0`, then run `--mode catchup --project <root>`.
-   - **Result:** `HOME=<tmp> node lib/big-brain-run.ts --mode catchup --project <root>` digests them oldest first. The global wiki goes to `<tmp>/.pi/agent/wiki`.
+   - **Driver:** do not run the CLI with a fake HOME. pi children need the real `~/.pi/agent` (`models.json` defines the custom `fedora` provider, and auth lives there too), and those must never be copied.
+     - Write `.scratch/eval/build.ts`: `import { main, realDeps } from "../../lib/big-brain-run.ts"` and call `await main(["--mode", "catchup", "--project", root], { ...realDeps, home: tmp })`.
+     - Only the wiki, state and registration paths use `tmp`. `runChild` spawns pi with the real environment and the worktree's guard.
+     - Registration records go in `stateDir(tmp)/sessions/`.
+     - Catch-up digests them oldest first. The global wiki goes to `<tmp>/.pi/agent/wiki`, which `main` creates and git-inits.
+     - Never point any write at the real `~/.pi/agent/wiki*`. Before running, assert that `tmp` is under `/var/tmp/pi-scratch/`.
    - **Check:** confirm both wikis validate. Record the page list.
 2. **Tasks:** 6 opening requests from human new_bsa_react sessions on or after 2026-11-19 (main dir and its worktrees). Candidates:
    - `2026-11-19T01-27`: Verify-page clickability. Use the 2nd message, "is there systematic to check wheter the button is non-clickable…", plus the context of the first.
@@ -200,6 +214,9 @@ All work stays in `.scratch/eval/` (untracked). Only the coordinator launches th
    ```
    pi -p --no-session --no-extensions --tools read,grep,find,ls --model fedora/opus
    ```
+
+   Run with the real HOME (provider config), from the eval checkout as cwd. `--no-extensions` keeps the live
+   big-brain extension from injecting the real wikis into either arm.
 
    - **Memory arm:** `--append-system-prompt <block file>`, where the block comes from the real `injectBlock(globalIdx, projectIdx, gDir, pDir)` over the temp wikis.
    - **Control arm:** no block.
