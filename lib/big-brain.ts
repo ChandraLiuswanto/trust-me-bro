@@ -6,11 +6,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { looksSecret } from "./forum.ts";
 
 export const CHUNK_BYTES = 60 * 1024;
-export const INDEX_CAP = 2048;
-export const MAX_PAGES = 20;
+export const INDEX_CAP = 6144; // injected into every session: the per-session prompt cost
 export const MAX_PAGE_LINES = 40;
 export const GLOBAL_TYPES = ["preference", "environment", "lesson"] as const;
-export const PROJECT_TYPES = ["decision", "gotcha"] as const; // plus the fixed name overview.md
+export const PROJECT_TYPES = ["gotcha", "fact", "decision"] as const;
 
 export type Entry = { type: string; id: string; timestamp?: string; message?: { role?: string; content?: unknown } };
 export type Reg = { sessionFile: string; projectRoot: string | null; pid: number };
@@ -134,58 +133,56 @@ export function areas(projectRoot: string): string[] {
   try {
     dirs = readdirSync(projectRoot, { withFileTypes: true })
       .filter((d) => d.isDirectory() && !d.name.startsWith("."))
-      .map((d) => d.name.toLowerCase());
+      .map((d) => d.name.toLowerCase().replace(/[^a-z0-9-]/g, "-"));
   } catch {
     // no repo dir: only the fixed areas
   }
   return [...new Set([...dirs, "db", "cross"])];
 }
 
-export function validPageName(name: string, kind: "global" | "project", areas: string[]): boolean {
-  if (kind === "global") return new RegExp(`^(${GLOBAL_TYPES.join("|")})-[a-z0-9-]+\\.md$`).test(name);
-  if (name === "overview.md") return true;
-  const m = new RegExp(`^(${PROJECT_TYPES.join("|")})-(.+)\\.md$`).exec(name);
-  return !!m && areas.some((a) => m[2].startsWith(`${a}-`) && /^[a-z0-9-]+$/.test(m[2].slice(a.length + 1)));
+export function validPageName(path: string, kind: "global" | "project", areas: string[]): boolean {
+  const m = /^([a-z]+)\/([^/]+)\.md$/.exec(path);
+  if (!m) return false;
+  const [, type, slug] = m;
+  if (kind === "global") return (GLOBAL_TYPES as readonly string[]).includes(type) && /^[a-z0-9-]+$/.test(slug);
+  if (!(PROJECT_TYPES as readonly string[]).includes(type)) return false;
+  return areas.some((a) => slug.startsWith(`${a}-`) && /^[a-z0-9-]+$/.test(slug.slice(a.length + 1)));
 }
 
 export function validateWiki(dir: string, kind: "global" | "project", areas: string[]): string | null {
-  let ents;
+  const pages: string[] = [];
   try {
-    ents = readdirSync(dir, { withFileTypes: true });
+    for (const d of readdirSync(dir, { withFileTypes: true })) {
+      if (d.name === "index.md" && d.isFile()) continue;
+      if (kind === "global" && d.name === ".git" && d.isDirectory()) continue;
+      if (!d.isDirectory() || d.name.startsWith(".")) return `not allowed at root: ${d.name}`;
+      for (const f of readdirSync(join(dir, d.name), { withFileTypes: true })) {
+        const p = `${d.name}/${f.name}`;
+        if (!f.isFile()) return `not a file: ${p}`;
+        if (!validPageName(p, kind, areas)) return `invalid page name: ${p}`;
+        pages.push(p);
+      }
+    }
   } catch (e) {
     return `cannot read ${dir}: ${(e as Error).message}`;
   }
-  const pages: string[] = [];
-  for (const d of ents) {
-    if (kind === "global" && d.name === ".git" && d.isDirectory()) continue;
-    if (!d.isFile()) return `not a file: ${d.name}`;
-    if (d.name === "index.md") continue;
-    if (!validPageName(d.name, kind, areas)) return `invalid page name: ${d.name}`;
-    pages.push(d.name);
-  }
-  if (pages.length > MAX_PAGES) return `too many pages: ${pages.length} > ${MAX_PAGES}`;
   for (const p of pages) {
     const text = readFileSync(join(dir, p), "utf8");
     if (looksSecret(text)) return `secret in ${p}`;
     const n = text.trimEnd().split("\n").length;
     if (n > MAX_PAGE_LINES + 10) return `page too long: ${p} (${n} lines)`;
   }
-  if (existsSync(join(dir, "index.md"))) {
-    const index = readFileSync(join(dir, "index.md"), "utf8");
-    if (looksSecret(index)) return "secret in index.md";
-    for (const [, link] of index.matchAll(/\]\(([^)]+\.md)\)/g))
-      if (!pages.includes(link)) return `index links missing page: ${link}`;
-  }
+  const index = existsSync(join(dir, "index.md")) ? readFileSync(join(dir, "index.md"), "utf8") : "";
+  if (bytes(index) > INDEX_CAP) return `index too big: ${bytes(index)} > ${INDEX_CAP}`;
+  if (looksSecret(index)) return "secret in index.md";
+  const links = [...index.matchAll(/\]\(([^)]+\.md)\)/g)].map((m) => m[1]);
+  for (const link of links) if (!pages.includes(link)) return `index links missing page: ${link}`;
+  for (const p of pages) if (!links.includes(p)) return `page not in index: ${p}`;
   return null;
 }
 
 function capIndex(index: string, dir: string): string {
-  let t = index.trim();
-  if (bytes(t) > INDEX_CAP) {
-    t = Buffer.from(t, "utf8").subarray(0, INDEX_CAP).toString("utf8");
-    t = t.slice(0, Math.max(0, t.lastIndexOf("\n")));
-  }
-  return t.replace(/\]\(([^)/]+\.md)\)/g, `](${dir}/$1)`);
+  return index.trim().replace(/\]\(([a-z]+\/[^)/]+\.md)\)/g, `](${dir}/$1)`);
 }
 
 export function injectBlock(

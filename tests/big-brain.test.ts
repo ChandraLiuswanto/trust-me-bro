@@ -122,23 +122,22 @@ test("digestible skip rules", () => {
 
 test("areas", async () => {
   const root = join(dir, "repo");
-  for (const d of ["frontend", "Backend", ".git", "internal-gitlab-api"]) await mkdir(join(root, d), { recursive: true });
+  for (const d of ["frontend", "Backend", ".git", "internal-gitlab-api", "parse_service"]) await mkdir(join(root, d), { recursive: true });
   await writeFile(join(root, "README.md"), "x");
-  assert.deepEqual(areas(root).sort(), ["backend", "cross", "db", "frontend", "internal-gitlab-api"]);
+  assert.deepEqual(areas(root).sort(), ["backend", "cross", "db", "frontend", "internal-gitlab-api", "parse-service"]);
   assert.deepEqual(areas(join(dir, "missing")).sort(), ["cross", "db"]);
 });
 
 test("validPageName", () => {
-  const A = ["frontend", "db", "cross"];
-  for (const n of ["preference-commit-messages.md", "environment-9router.md", "lesson-x.md"])
+  const A = ["frontend", "db", "cross", "parse-service"];
+  for (const n of ["lesson/x.md", "preference/commit-msgs.md", "environment/9router.md"])
     assert.equal(validPageName(n, "global", A), true, n);
-  for (const n of ["notes.md", "gotcha-x.md", "overview.md", "preference-.md", "preference-A.md"])
+  for (const n of ["lesson-x.md", "overview.md", "gotcha/x.md", "lesson/a/b.md", "notes/x.md", "preference/.md", "preference/A.md"])
     assert.equal(validPageName(n, "global", A), false, n);
-  for (const n of ["overview.md", "gotcha-frontend-x.md", "gotcha-db-x.md", "gotcha-cross-x.md", "decision-db-alembic-baseline.md"])
+  for (const n of ["gotcha/frontend-x.md", "fact/db-y.md", "decision/cross-z.md", "gotcha/parse-service-x.md"])
     assert.equal(validPageName(n, "project", A), true, n);
-  for (const n of ["overview-x.md", "gotcha-ui-x.md", "notes.md", "gotcha-frontend-.md", "preference-x.md", "decision-frontend.md"])
+  for (const n of ["overview.md", "gotcha-frontend-x.md", "gotcha/x.md", "gotcha/ui-x.md", "notes/frontend-x.md", "gotcha/frontend-X.md", "fact/parse_service-x.md", "gotcha/frontend-.md", "lesson/frontend-x.md", "gotcha/a/frontend-x.md"])
     assert.equal(validPageName(n, "project", A), false, n);
-  assert.equal(validPageName("decision-internal-gitlab-api-auth.md", "project", ["internal-gitlab-api", "db", "cross"]), true);
 });
 
 test("validateWiki", async () => {
@@ -147,47 +146,58 @@ test("validateWiki", async () => {
     const d = join(dir, `w${n++}`);
     await mkdir(d, { recursive: true });
     for (const s of dirs) await mkdir(join(d, s), { recursive: true });
-    for (const [k, v] of Object.entries(files)) await writeFile(join(d, k), v);
+    for (const [k, v] of Object.entries(files)) {
+      await mkdir(join(d, k, ".."), { recursive: true });
+      await writeFile(join(d, k), v);
+    }
     return d;
   };
   const A = ["frontend", "db", "cross"];
-  const ok = { "index.md": "- [lesson-a](lesson-a.md): a\n", "lesson-a.md": "fact [s:2026-11-21 abcdef]\n" };
+  const ok = { "index.md": "### lesson\n- [lesson/a](lesson/a.md): a\n", "lesson/a.md": "fact [s:2026-11-21 abcdef]\n" };
   assert.equal(validateWiki(await wiki(ok), "global", A), null);
   assert.equal(validateWiki(await wiki({}), "global", A), null);
   assert.equal(validateWiki(await wiki(ok, [".git"]), "global", A), null);
   assert.notEqual(validateWiki(await wiki({}, [".git"]), "project", A), null);
-  assert.notEqual(validateWiki(await wiki(ok, ["sub"]), "global", A), null);
+  assert.equal(validateWiki(await wiki(ok, ["preference"]), "global", A), null, "empty type dir ok");
+  assert.notEqual(validateWiki(await wiki({ ...ok, "lesson/b.md": "x" }), "global", A), null, "unlisted");
+  assert.notEqual(validateWiki(await wiki({ "lesson/a.md": "x" }), "global", A), null, "unlisted, no index");
+  assert.notEqual(validateWiki(await wiki({ ...ok, "index.md": ok["index.md"] + "- [b](lesson/b.md): b\n" }), "global", A), null, "dangling");
+  assert.notEqual(validateWiki(await wiki({ ...ok, "lesson/sub/c.md": "x" }), "global", A), null, "nested");
+  assert.notEqual(validateWiki(await wiki({ ...ok, "lesson/index.md": "x" }), "global", A), null, "index in type dir");
+  assert.notEqual(validateWiki(await wiki({ ...ok, "overview.md": "x" }), "project", A), null, "root overview");
   assert.notEqual(validateWiki(await wiki({ ...ok, ".hidden.md": "x" }), "global", A), null);
-  assert.notEqual(validateWiki(await wiki({ ...ok, "notes.md": "x" }), "global", A), null);
-  assert.notEqual(validateWiki(await wiki({ ...ok, "lesson-a.md": "key sk-ant-abcdefghijklmnopqrstu" }), "global", A), null);
-  assert.notEqual(validateWiki(await wiki({ ...ok, "index.md": "AKIAABCDEFGHIJKLMNOP" }), "global", A), null);
-  assert.notEqual(validateWiki(await wiki({ ...ok, "index.md": "- [x](lesson-b.md): b\n" }), "global", A), null);
-  assert.notEqual(validateWiki(await wiki({ ...ok, "lesson-a.md": "l\n".repeat(51) }), "global", A), null);
-  const many: Record<string, string> = {};
-  for (let i = 0; i < 21; i++) many[`lesson-${i}.md`] = "x";
-  assert.notEqual(validateWiki(await wiki(many), "global", A), null);
-  assert.equal(validateWiki(await wiki({ "overview.md": "x", "gotcha-db-x.md": "y" }), "project", A), null);
+  assert.notEqual(validateWiki(await wiki({ ...ok, "notes/x.md": "x" }), "global", A), null);
+  assert.notEqual(validateWiki(await wiki({ ...ok, "lesson/a.md": "key sk-ant-abcdefghijklmnopqrstu" }), "global", A), null);
+  assert.notEqual(validateWiki(await wiki({ ...ok, "index.md": ok["index.md"] + "AKIAABCDEFGHIJKLMNOP" }), "global", A), null);
+  assert.notEqual(validateWiki(await wiki({ ...ok, "lesson/a.md": "l\n".repeat(51) }), "global", A), null);
+  const many: Record<string, string> = { "index.md": "### lesson\n" };
+  for (let i = 0; i < 30; i++) {
+    many[`lesson/p${i}.md`] = "x";
+    many["index.md"] += `- [lesson/p${i}](lesson/p${i}.md): topic ${i}\n`;
+  }
+  assert.equal(validateWiki(await wiki(many), "global", A), null, "30 pages within cap");
+  const bigIdx = ok["index.md"] + "x".repeat(INDEX_CAP);
+  const big = await wiki({ ...ok, "index.md": bigIdx });
+  assert.match(validateWiki(big, "global", A) ?? "", /index too big/);
+  assert.equal(await readFile(join(big, "index.md"), "utf8"), bigIdx, "not truncated");
+  assert.equal(validateWiki(await wiki({ "index.md": "### gotcha\n- [g](gotcha/db-x.md): g\n", "gotcha/db-x.md": "y" }), "project", A), null);
   assert.notEqual(validateWiki(join(dir, "nope"), "global", A), null);
 });
 
 test("injectBlock", () => {
   assert.equal(injectBlock(null, "", "/g", null), "");
   assert.equal(injectBlock("  \n", null, "/g", "/p"), "");
-  const b = injectBlock("- [lesson-a](lesson-a.md): a\n", "- [overview](overview.md): what\n", "/h/.pi/agent/wiki", "/r/.pi/wiki");
+  const b = injectBlock("### lesson\n- [lesson/a](lesson/a.md): a\n", "### gotcha\n- [gotcha/frontend-x](gotcha/frontend-x.md): what\n", "/h/.pi/agent/wiki", "/r/.pi/wiki");
   assert.ok(b.startsWith("## Memory wiki\n"));
   assert.ok(b.includes("If the user's current message\ncontradicts a page, the message wins."));
-  assert.ok(b.includes("### Global wiki (/h/.pi/agent/wiki/)\n- [lesson-a](/h/.pi/agent/wiki/lesson-a.md): a"));
-  assert.ok(b.includes("### Project wiki (/r/.pi/wiki/)\n- [overview](/r/.pi/wiki/overview.md): what"));
-  const only = injectBlock(null, "- [overview](overview.md): what", "/g", "/p");
+  assert.ok(b.includes("### Global wiki (/h/.pi/agent/wiki/)\n### lesson\n- [lesson/a](/h/.pi/agent/wiki/lesson/a.md): a"));
+  assert.ok(b.includes("### Project wiki (/r/.pi/wiki/)\n### gotcha\n- [gotcha/frontend-x](/r/.pi/wiki/gotcha/frontend-x.md): what"));
+  const only = injectBlock(null, "- [f](fact/db-x.md): what", "/g", "/p");
   assert.ok(!only.includes("### Global wiki"));
-  const big = Array.from({ length: 200 }, (_, i) => `- [lesson-${i}](lesson-${i}.md): topic ${i}`).join("\n");
-  const capped = injectBlock(big, null, "/g", null);
-  const idx = capped.slice(capped.indexOf("### Global wiki"));
-  assert.ok(idx.includes("lesson-0") && !idx.includes("lesson-199"));
-  const raw = big.slice(0, INDEX_CAP);
-  const kept = raw.slice(0, raw.lastIndexOf("\n")).split("\n").length;
-  assert.equal(idx.split("\n").length - 1, kept);
-  assert.ok(idx.trimEnd().endsWith(`topic ${kept - 1}`));
+  const big = Array.from({ length: 200 }, (_, i) => `- [lesson/p${i}](lesson/p${i}.md): topic ${i}`).join("\n");
+  const whole = injectBlock(big, null, "/g", null);
+  assert.ok(Buffer.byteLength(big) > INDEX_CAP);
+  assert.ok(whole.includes("- [lesson/p199](/g/lesson/p199.md): topic 199"), "over-cap index injected whole");
 });
 
 test("writeAtomic leaves no tmp file", async () => {
