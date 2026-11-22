@@ -138,12 +138,13 @@ ${project}
 
 Rules:
 - The default is to write nothing. Keep only what a future session would want, and that isn't already in APPEND_SYSTEM.md, AGENTS.md, CLAUDE.md, bd, or the repo's own docs (README.md, docs/, a hand-written wiki/). You may read those but never write there; link to them instead of copying.
-- Don't record session history: no worktree paths, branch names, commit hashes, test counts, merge/push/deploy status or review/approval narration.
+- Don't restate a spec or plan; if the repo's docs cover it, write nothing.
+- Don't record session history: no worktree paths, branch names, commit hashes, test counts, merge/push/deploy status or review/approval narration, or what a plan, spec or review said or required.
 - Rewrite pages; don't just append. Merge duplicates. When a newer session contradicts a fact, replace it and keep the newer citation. To delete a page, overwrite it with empty content.
 - Every fact line ends with this session's citation: ${o.cite}
 - Caps: about ${MAX_PAGE_LINES} lines per page, index entries one line each.
 - Never write secrets: keys, tokens, passwords, auth URLs, private user data.
-- Name every page <type>/<slug>.md (slug: lowercase a-z, 0-9, -) using that wiki's types (${PROJECT_TYPES.join(", ")} for the project wiki); project pages are <type>/<area>-<slug>.md. Exactly one folder level. Put a fact on the page of the type it belongs to. No other files; index.md sits only at the wiki root.
+- Name every page <type>/<slug>.md (slug: lowercase a-z, 0-9, -) using that wiki's types (${PROJECT_TYPES.join(", ")} for the project wiki); project pages are <type>/<area>-<slug>.md. Each project page name MUST start with one of these areas: ${o.areas.join(", ")}. Good: gotcha/backend-formula-injection.md. Rejected: gotcha/formula-injection.md: no area. A page without a listed area is rejected and the whole update is thrown away. Exactly one folder level. Put a fact on the page of the type it belongs to. No other files; index.md sits only at the wiki root.
 - Keep each wiki's index.md in sync with its pages: one line per page under a "### <type>" heading per non-empty folder. Each line is "- [type/name](type/name.md): <the concrete topics on the page>", with links relative to the wiki root, e.g. "commit messages, reply length, review habits", not "preferences".
 - Keep each index.md under ${INDEX_CAP} bytes (INDEX_CAP; current size: global ${Buffer.byteLength(o.globalIndex)} bytes, project ${Buffer.byteLength(o.projectIndex)} bytes). If an update would exceed the cap, merge related pages or shorten lines.
 

@@ -96,7 +96,9 @@ test("prompt: no-history rule, folder types, index cap and size", async () => {
   await writeFile(join(t.pw, "index.md"), "");
   await t.run(writePages(G, P));
   const p = t.calls[0].prompt;
-  assert.ok(p.includes("- Don't record session history: no worktree paths, branch names, commit hashes, test counts, merge/push/deploy status or review/approval narration.\n- Rewrite pages"));
+  assert.ok(p.includes("- Don't record session history: no worktree paths, branch names, commit hashes, test counts, merge/push/deploy status or review/approval narration, or what a plan, spec or review said or required.\n- Rewrite pages"));
+  assert.ok(p.includes("- Don't restate a spec or plan; if the repo's docs cover it, write nothing.\n"));
+  assert.match(p, /MUST start with one of these areas: [^\n]*frontend[^\n]*gotcha\/backend-formula-injection\.md[^\n]*gotcha\/formula-injection\.md: no area[^\n]*whole update is thrown away/);
   for (const w of ["decision", "fact", "gotcha", `${INDEX_CAP} bytes`, "current size: global 0 bytes, project 0 bytes", "docs/superpowers/specs/"]) assert.ok(p.includes(w), w);
   for (const w of ["overview.md", "pages per wiki", "MAX_PAGES"]) assert.ok(!p.includes(w), w);
 });
