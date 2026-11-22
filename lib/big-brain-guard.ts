@@ -1,6 +1,6 @@
 /**
  * Loaded only into the big-brain updater child (via -e): write/edit may only touch pages
- * directly inside the staging dirs in BIG_BRAIN_ROOTS (colon-separated).
+ * directly inside, or one folder level below, the staging dirs in BIG_BRAIN_ROOTS (colon-separated).
  */
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
@@ -21,7 +21,12 @@ export function allowedTarget(target: string, cwd: string, roots: string[]): boo
   const abs = resolve(cwd, target);
   if (basename(abs).startsWith(".")) return false;
   try {
-    return roots.includes(realParent(abs)) && !isLink(abs);
+    const parent = realParent(abs);
+    const folder = dirname(abs); // one level: the type folder, never a dotdir or symlink
+    const ok =
+      roots.includes(parent) ||
+      (roots.includes(dirname(parent)) && !basename(folder).startsWith(".") && !isLink(folder));
+    return ok && !isLink(abs);
   } catch {
     return false;
   }
