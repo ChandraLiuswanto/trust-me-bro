@@ -116,6 +116,11 @@ two small markdown wikis. Every session then gets both indexes injected under
 `## Memory wiki` and reads pages on demand. Workers, print-mode runs and the
 updater itself are never digested.
 
+- Layout: one folder per page type (`<type>/<slug>.md`, one level), plus one
+  grouped `index.md` per wiki. Project types are `gotcha`, `fact` and
+  `decision`; a decision is only a choice no spec or doc records.
+- The index is capped at 6 KB per wiki, enforced; there is no page cap.
+- Pages state what is true now, never how it got there (no history).
 - Global wiki: `~/.pi/agent/wiki/`, private, its own git repo, auto-committed.
 - Project wiki: `<main checkout>/.pi/wiki/`, shared through git, never
   committed by the updater. Opt a repo in with `mkdir .pi/wiki`.
@@ -127,7 +132,8 @@ updater itself are never digested.
 - `bigBrain.model` in `~/.pi/agent/settings.json` picks the model
   (default `fedora/memory-generate`).
 
-Design: `docs/superpowers/specs/2026-11-21-big-brain-design.md`. Run the tests
+Design: `docs/superpowers/specs/2026-11-21-big-brain-design.md` and
+`docs/superpowers/specs/2026-11-22-big-brain-folders-design.md`. Run the tests
 with `node --test tests/*.test.ts`.
 
 ## Requires
