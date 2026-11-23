@@ -44,6 +44,10 @@ test("rejects outside, .., sibling prefix, nested, hidden, symlink", () => {
   assert.equal(allowedTarget(join(root, "linkout", "x.md"), dir, roots), false);
   assert.equal(allowedTarget(join(root, "loop", "x.md"), dir, roots), false);
   assert.equal(allowedTarget(join(root, "loop", "loop", "x.md"), dir, roots), false);
+  assert.equal(allowedTarget(join(root, "loop", "lesson", "x.md"), dir, roots), false);
+  assert.equal(allowedTarget(join(root, "loop", "missing", "x.md"), dir, roots), false);
+  assert.equal(allowedTarget(join(root, "loop", "loop", "lesson", "x.md"), dir, roots), false);
+  assert.equal(allowedTarget(join(dir, "alias", "loop", "lesson", "x.md"), dir, roots), false);
   assert.equal(allowedTarget(`${root}/lesson/../x.md`, dir, roots), false);
   assert.equal(allowedTarget(join(root, ".state.json"), dir, roots), false);
   assert.equal(allowedTarget(join(root, "link.md"), dir, roots), false);
