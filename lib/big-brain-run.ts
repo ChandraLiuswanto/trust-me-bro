@@ -116,7 +116,7 @@ export async function preflightAndApply(pairs: WikiPair[]): Promise<string[][] |
 }
 
 function buildPrompt(o: {
-  cite: string; global: string; project: string | null; areas: string[];
+  cite: string; global: string; project: string | null; repo: string | null; areas: string[];
   globalIndex: string; projectIndex: string; bd: string; chunk: string;
 }): string {
   const project = o.project
@@ -126,10 +126,10 @@ function buildPrompt(o: {
   | gotcha | Known failures and traps: what breaks, why, and how to avoid it |
   | fact | True but not in the code: domain rules, deploy and ops order, where things live |
   | decision | Only a choice that no spec or doc records, always with the reason and what was ruled out |
-  Write a decision only when no spec or doc records it: first check the repo's docs/ (e.g. \`docs/superpowers/specs/\`) and README; if one covers it, write nothing, or at most a fact line pointing to it.
+  Repo: ${o.repo}. Before writing a project page, search its docs (grep ${o.repo}/docs, e.g. docs/superpowers/specs/ and plans/) for the topic; if a spec or doc covers it, write nothing.
   Areas: ${o.areas.join(", ")} (db = schema and migrations, cross = spans apps).`
     : "There is no project wiki for this session. Write only global pages.";
-  return `You maintain a memory wiki of notes from Pi coding sessions with Chandra. Below is one chunk of a past session transcript. Update the wiki staging copies so future sessions benefit, using only the read, write and edit tools. Write only inside the staging dirs below (one type folder level deep), never anywhere else.
+  return `You maintain a memory wiki of notes from Pi coding sessions with Chandra. Below is one chunk of a past session transcript. Update the wiki staging copies so future sessions benefit, using only the read, grep, find, ls, write and edit tools. Write only inside the staging dirs below (one type folder level deep), never anywhere else.
 
 Global wiki (staging copy): ${o.global}/
   Chandra's preferences and corrections; machine/environment facts; lessons that apply across projects.
@@ -174,6 +174,7 @@ async function runChunk(deps: Deps, sd: string, reg: Reg, cite: string, c: Chunk
       cite,
       global: pairs[0].staged,
       project: pLive && pairs[1].staged,
+      repo: reg.projectRoot,
       areas: A,
       globalIndex: (await readOr(join(gLive, "index.md"))) ?? "",
       projectIndex: (pLive && (await readOr(join(pLive, "index.md")))) ?? "",
@@ -297,7 +298,7 @@ export const realDeps: Deps = {
   home: homedir(),
   async runChild(prompt, roots, timeoutMs) {
     const guard = fileURLToPath(new URL("./big-brain-guard.ts", import.meta.url));
-    const args = ["-p", "--no-session", "--no-extensions", "-e", guard, "--model", await model(homedir()), "--tools", "read,write,edit", prompt];
+    const args = ["-p", "--no-session", "--no-extensions", "-e", guard, "--model", await model(homedir()), "--tools", "read,grep,find,ls,write,edit", prompt];
     const child = spawn("pi", args, { env: { ...process.env, PI_BIG_BRAIN: "off", BIG_BRAIN_ROOTS: roots.join(":") }, stdio: "ignore" });
     const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
     return new Promise((resolve) => {

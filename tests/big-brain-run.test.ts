@@ -101,6 +101,7 @@ test("prompt: no-history rule, folder types, index cap and size", async () => {
   assert.match(p, /MUST start with one of these areas: [^\n]*frontend[^\n]*gotcha\/backend-formula-injection\.md[^\n]*gotcha\/formula-injection\.md: no area[^\n]*whole update is thrown away/);
   for (const w of ["decision", "fact", "gotcha", `${INDEX_CAP} bytes`, "current size: global 0 bytes, project 0 bytes", "docs/superpowers/specs/"]) assert.ok(p.includes(w), w);
   for (const w of ["overview.md", "pages per wiki", "MAX_PAGES"]) assert.ok(!p.includes(w), w);
+  assert.ok(p.includes(`Repo: ${t.root}. Before writing a project page, search its docs (grep ${t.root}/docs, e.g. docs/superpowers/specs/ and plans/) for the topic; if a spec or doc covers it, write nothing.`));
 });
 
 test("fresh empty global wiki, child writes nothing → no commit, marker advanced", async () => {
@@ -367,6 +368,7 @@ test("project wiki not created when .pi/wiki is absent; global still updates", a
   await t.run(writePages(G));
   assert.equal(t.calls[0].roots.length, 1);
   assert.match(t.calls[0].prompt, /no project wiki/);
+  assert.ok(!t.calls[0].prompt.includes("Repo: "), "no project wiki, no repo line");
   assert.ok(!existsSync(t.pw));
   assert.ok(existsSync(join(t.gw, "lesson/a.md")));
   assert.equal(t.commits().length, 1);
