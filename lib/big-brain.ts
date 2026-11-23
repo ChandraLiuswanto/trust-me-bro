@@ -142,7 +142,7 @@ export function areas(projectRoot: string): string[] {
 
 export function validPageName(path: string, kind: "global" | "project", areas: string[]): boolean {
   const m = /^([a-z]+)\/([^/]+)\.md$/.exec(path);
-  if (!m) return false;
+  if (!m || m[2] === "index") return false; // index.md lives only at the wiki root
   const [, type, slug] = m;
   if (kind === "global") return (GLOBAL_TYPES as readonly string[]).includes(type) && /^[a-z0-9-]+$/.test(slug);
   if (!(PROJECT_TYPES as readonly string[]).includes(type)) return false;

@@ -132,7 +132,7 @@ test("validPageName", () => {
   const A = ["frontend", "db", "cross", "parse-service"];
   for (const n of ["lesson/x.md", "preference/commit-msgs.md", "environment/9router.md"])
     assert.equal(validPageName(n, "global", A), true, n);
-  for (const n of ["lesson-x.md", "overview.md", "gotcha/x.md", "lesson/a/b.md", "notes/x.md", "preference/.md", "preference/A.md"])
+  for (const n of ["lesson-x.md", "overview.md", "gotcha/x.md", "lesson/a/b.md", "notes/x.md", "preference/.md", "preference/A.md", "lesson/index.md"])
     assert.equal(validPageName(n, "global", A), false, n);
   for (const n of ["gotcha/frontend-x.md", "fact/db-y.md", "decision/cross-z.md", "gotcha/parse-service-x.md"])
     assert.equal(validPageName(n, "project", A), true, n);
@@ -164,6 +164,8 @@ test("validateWiki", async () => {
   assert.notEqual(validateWiki(await wiki({ ...ok, "index.md": ok["index.md"] + "- [b](lesson/b.md): b\n" }), "global", A), null, "dangling");
   assert.notEqual(validateWiki(await wiki({ ...ok, "lesson/sub/c.md": "x" }), "global", A), null, "nested");
   assert.notEqual(validateWiki(await wiki({ ...ok, "lesson/index.md": "x" }), "global", A), null, "index in type dir");
+  const linked = { "index.md": ok["index.md"] + "- [lesson/index](lesson/index.md): i\n", "lesson/a.md": "x", "lesson/index.md": "x" };
+  assert.notEqual(validateWiki(await wiki(linked), "global", A), null, "linked index in type dir");
   assert.notEqual(validateWiki(await wiki({ ...ok, "overview.md": "x" }), "project", A), null, "root overview");
   assert.notEqual(validateWiki(await wiki({ ...ok, ".hidden.md": "x" }), "global", A), null);
   assert.notEqual(validateWiki(await wiki({ ...ok, "notes/x.md": "x" }), "global", A), null);
