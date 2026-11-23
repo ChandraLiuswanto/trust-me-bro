@@ -1,6 +1,6 @@
 # big-brain: type folders, no-history rule, rebuild
 
-**Status:** Approved (since 2026-11-22 12:38 WIB)
+**Status:** Done (since 2026-11-23 16:51 WIB)
 
 ## Problem
 
@@ -178,6 +178,9 @@ and comes back to Chandra before merge, even if the code reviews pass.
 - Automatic migration of flat pages (Chandra chose wipe and rebuild).
 - Area folders or deeper nesting.
 - The `child exited 1` flake (about 8% of child runs in every variant; model/9Router side).
+- **Known limit, spec duplication:** in a docs-heavy repo the project wiki restates specs (eval audit: 67% of
+  project lines). Letting the updater grep the docs (tried in 5ac8d70, reverted) cut recall without lowering the
+  share, so it shipped without it. The memory still won the blind A/B 6-0 with 6 ties and no stale facts.
 
 ## Status History
 
@@ -193,3 +196,4 @@ and comes back to Chandra before merge, even if the code reviews pass.
 - 2026-11-22 12:37 WIB: Revised: acceptance eval — build wiki from older sessions, reviewer judges blind A/B on later real tasks
 - 2026-11-22 12:37 WIB: Waiting approval
 - 2026-11-22 12:38 WIB: Approved
+- 2026-11-23 16:51 WIB: Done
