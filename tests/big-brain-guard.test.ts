@@ -17,6 +17,7 @@ await writeFile(join(dir, "outside.md"), "x");
 await symlink(join(dir, "outside.md"), join(root, "link.md"));
 await symlink(root, join(dir, "alias"));
 await symlink(join(root, "lesson"), join(root, "linkin"));
+await symlink(root, join(root, "loop"));
 await symlink(join(dir, "elsewhere"), join(root, "linkout"));
 const roots = [root];
 
@@ -41,6 +42,8 @@ test("rejects outside, .., sibling prefix, nested, hidden, symlink", () => {
   assert.equal(allowedTarget(join(root, ".x", "y.md"), dir, roots), false);
   assert.equal(allowedTarget(join(root, "linkin", "x.md"), dir, roots), false);
   assert.equal(allowedTarget(join(root, "linkout", "x.md"), dir, roots), false);
+  assert.equal(allowedTarget(join(root, "loop", "x.md"), dir, roots), false);
+  assert.equal(allowedTarget(join(root, "loop", "loop", "x.md"), dir, roots), false);
   assert.equal(allowedTarget(`${root}/lesson/../x.md`, dir, roots), false);
   assert.equal(allowedTarget(join(root, ".state.json"), dir, roots), false);
   assert.equal(allowedTarget(join(root, "link.md"), dir, roots), false);

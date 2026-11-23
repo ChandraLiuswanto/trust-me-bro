@@ -22,11 +22,12 @@ export function allowedTarget(target: string, cwd: string, roots: string[]): boo
   if (basename(abs).startsWith(".")) return false;
   try {
     const parent = realParent(abs);
-    const folder = dirname(abs); // one level: the type folder, never a dotdir or symlink
-    const ok =
-      roots.includes(parent) ||
-      (roots.includes(dirname(parent)) && !basename(folder).startsWith(".") && !isLink(folder));
-    return ok && !isLink(abs);
+    const folder = dirname(abs);
+    // A folder sitting directly in a root is a type folder: never a dotdir or symlink, even one
+    // pointing back at the root. A symlinked ROOT path itself (an alias) is fine.
+    if (roots.includes(realParent(folder)) && (basename(folder).startsWith(".") || isLink(folder)))
+      return false;
+    return (roots.includes(parent) || roots.includes(dirname(parent))) && !isLink(abs);
   } catch {
     return false;
   }
