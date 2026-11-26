@@ -5,7 +5,19 @@ description: Use when creating or reviewing OCBC Indonesia–inspired PowerPoint
 
 # OCBC Indonesia visual design
 
-Choose the visual family before choosing tokens. This is a working design reference, not an official OCBC brand manual. Approved brand assets and guidelines supplied for the job take precedence.
+Choose the visual family before choosing tokens. This is a working design reference, not an official OCBC brand manual. Approved brand assets and guidelines supplied for the job take precedence. No other skill, project checkout, remote font, or network lookup is required.
+
+## Bundled assets
+
+| Asset | Use |
+|---|---|
+| [Red OCBC logo and wordmark](assets/ocbc-red.png) | Light backgrounds. |
+| [White OCBC logo and wordmark](assets/ocbc-white.png) | Dark backgrounds. |
+| [Brand copy and logo sources](assets/brand-copy.md) | Display and legal names, alt text, and sample Indonesian and English labels. |
+
+Resolve paths from this skill directory. Embed the PNG in a deck; for HTML, copy it into the output or embed it as a data URL for a single-file deliverable. Preserve the original colors and proportions. Use `alt="OCBC"` when the logo identifies the brand, or empty alt text when adjacent text already gives the name.
+
+## Design tokens
 
 | Target | Accent and surfaces | Typography |
 |---|---|---|
@@ -24,10 +36,10 @@ Choose the visual family before choosing tokens. This is a working design refere
 
 ## Before export
 
-Check actual foreground/background pairs, including the light end of any gradient: aim for WCAG AA (4.5:1 for normal text, 3:1 for large text and essential non-text controls). Render the final deck or page and check clipping, charts, mobile layout where relevant, and font substitution. Use a supplied, approved logo as-is; if there is none, omit it rather than inventing a logo or implying endorsement.
+Check actual foreground/background pairs, including the light end of any gradient: aim for WCAG AA (4.5:1 for normal text, 3:1 for large text and essential non-text controls). Render the final deck or page and check clipping, charts, mobile layout where relevant, and font substitution. Use approved artwork as supplied. Use bundled artwork for drafts or internal mockups where permitted. Confirm approval and usage rights before publication; if approval is missing, omit the logo.
 
 ## Evidence and precedence
 
 - [OCBC Indonesia homepage](https://www.ocbc.id/) and its [public stylesheet](https://cdn1.ocbc.id/asset/media/Base-Themes/OCBCID/Styles/normal/style.css?rev=-1?v=1): `.ocbc-btn--primary` shows the public-site gradient. A website treatment does not establish the full corporate palette.
 - [OCBC Indonesia rebrand announcement](https://www.ocbc.id/en/tentang-ocbc/informasi/siaran-pers/2023/11/15/rebranding-ocbc) and [OCBC Group Annual Report: The Power of One Brand](https://www.ocbc.com/group/investors/annual-reports/2023-annual-report/the-power-of-one-brand.page): the current OCBC name and logo were introduced in Indonesia in November 2023. These sources do not specify the palette above.
-- For a project match, consult BSA React `frontend/src/styles/tokens.css` or CODEC New `frontend/src/styles/theme.css` in the relevant checkout if available. Live project tokens take precedence over the snapshots here.
+- The BSA React and CODEC New rows are snapshots. Inside either app, preserve the live theme; otherwise use the values above. If a named font is unavailable, use a system sans or monospace as appropriate. Source links are provenance, not setup steps.
